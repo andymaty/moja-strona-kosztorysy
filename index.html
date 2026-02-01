@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Program Warsztatowy</title>
+    <title>Program Warsztatowy v3c (warsztatowy język)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -4568,10 +4568,19 @@
 WAŻNE ZASADY:
 1. Zwróć TYLKO poprawny JSON bez dodatkowego tekstu
 2. Wyciągnij wszystkie dostępne dane - imię, telefon, adres, email klienta
-3. Wyciągnij szczegóły pojazdu - markę, model, rok, rejestrację, VIN, przebieg, moc, pojemność
-4. Ocen priorytet każdej naprawy: "PILNE" (bezpieczeństwo), "ZALECANE" (konserwacja), "OPCJONALNE" (komfort) 
-5. Wyodrębnij uwagi techniczne, zalecenia, dodatkowe usterki do sprawdzenia
-6. Jeśli brak ceny, ustaw 0. Jeśli brak ilości, ustaw 1
+3. Wyciągnij szczegóły pojazdu - markę, model, rok, rejestrację, VIN, przebieg, moc, pojemność, kolor, skrzynię biegów
+PRZYKŁADY ROZPOZNAWANIA:
+- "ma automat" → transmission: "automatyczna"  
+- "skrzynia automatyczna" → transmission: "automatyczna"
+- "manual" → transmission: "manualna"
+- "6-biegowa manualna" → transmission: "6-biegowa manualna"
+- "CVT" → transmission: "CVT"
+- "czerwone auto" → color: "czerwony"
+4. WAŻNE: Wszystkie inne informacje o pojeździe (np. uszkodzenia, stan techniczny, wyposażenie) umieść w technicalNotes
+5. ZASADA FALLBACK: Wszelkie informacje które nie pasują do standardowych pól JSON, automatycznie wrzuć do technicalNotes
+6. Ocen priorytet każdej naprawy: "PILNE" (bezpieczeństwo), "ZALECANE" (konserwacja), "OPCJONALNE" (komfort) 
+6. Wyodrębnij uwagi techniczne, zalecenia, dodatkowe usterki do sprawdzenia
+7. Jeśli brak ceny, ustaw 0. Jeśli brak ilości, ustaw 1
 
 Format odpowiedzi (TYLKO JSON):
 {
@@ -4590,7 +4599,9 @@ Format odpowiedzi (TYLKO JSON):
     "mileage": przebieg_jako_liczba,
     "engineCapacity": "pojemność silnika (np. 2.0 TDI)",
     "power": moc_w_km_jako_liczba,
-    "engineCode": "kod silnika"
+    "engineCode": "kod silnika",
+    "color": "kolor pojazdu",
+    "transmission": "skrzynia biegów: automatyczna/automat/manualna/manual/sekwencja/CVT/DSG/tiptronic"
   },
   "items": [
     {
@@ -4601,7 +4612,7 @@ Format odpowiedzi (TYLKO JSON):
       "priority": "PILNE/ZALECANE/OPCJONALNE"
     }
   ],
-  "technicalNotes": "szczegółowe uwagi techniczne, zalecenia, dodatkowe usterki do sprawdzenia w przyszłości"
+  "technicalNotes": "szczegółowe uwagi techniczne, zalecenia, dodatkowe usterki do sprawdzenia w przyszłości, uszkodzenia pojazdu, stan techniczny, wyposażenie, wszystkie inne informacje które nie pasują do standardowych pól"
 }
 
 PRIORYTETY - automatyczna ocena:
@@ -4619,7 +4630,7 @@ PRZYKŁADY WYODRĘBNIANIA:
                             role: 'user',
                             content: inputText
                         }],
-                        temperature: 0.3,
+                        temperature: 0,
                         max_tokens: 1500
                     })
                 });
