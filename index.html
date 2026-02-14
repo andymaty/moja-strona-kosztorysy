@@ -3,7 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Program Warsztatowy v3e (naprawa podpowiedzi)</title>
+    <title>Program Warsztatowy v8</title>
+    
+    <!-- FontAwesome dla ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- ZXing-WASM - obsługuje Aztec Code, QR Code, DataMatrix i inne kody 2D -->
+    <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js"></script>
+    
+    <!-- Tesseract.js v5 - OCR do odczytu screenów z carq.pl -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -512,6 +522,85 @@
             margin-top: 4px;
             white-space: pre-line;
         }
+        
+        /* QR Scanner Styles */
+        .qr-scanner-container {
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .qr-scanner-container:hover {
+            border-color: #0056b3;
+            background: #e9ecef;
+        }
+        
+        .qr-scanner-container.dragover,
+        .qr-scanner-container.drag-over {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        
+        .qr-preview {
+            max-width: 200px;
+            max-height: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px auto;
+        }
+        
+        .qr-result {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .qr-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #721c24;
+        }
+        
+        .vehicle-qr-code {
+            width: 80px;
+            height: 80px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .qr-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        .qr-button:hover {
+            background: #0056b3;
+        }
+        
+        .qr-button.secondary {
+            background: #6c757d;
+        }
+        
+        .qr-button.secondary:hover {
+            background: #545b62;
+        }
     </style>
 </head>
 <body>
@@ -560,7 +649,8 @@
                         <th>Model</th>
                         <th>Rok</th>
                         <th>VIN</th>
-                        <th>Kod silnika</th>
+                        <th>Silnik</th>
+                        <th>Paliwo</th>
                         <th>Przebieg</th>
                         <th>Właściciel</th>
                         <th>Akcje</th>
@@ -723,7 +813,7 @@
                     <h3>Dane firmy</h3>
                     <div class="form-group">
                         <label>Nazwa firmy:</label>
-                        <input type="text" id="companyName" class="issuer-field" value="SKLEP I WARSZTAT U KAMILA MATUSZEWICZ">
+                        <input type="text" id="companyName" class="issuer-field" value="SKLEP I WARSZTAT U KAMCI">
                     </div>
                     <div class="form-group">
                         <label>Adres:</label>
@@ -959,6 +1049,21 @@
         <div class="modal-content">
             <span class="close" onclick="closeModal('vehicleModal')">&times;</span>
             <h2 id="vehicleModalTitle">Dodaj pojazd</h2>
+            
+            <!-- Aztec/QR Scanner Section v7 -->
+            <div class="qr-scanner-section" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #007bff;">📱 Skanuj kod Aztec/QR z dowodu rejestracyjnego</h3>
+                <button class="qr-button" onclick="showQRScanner()">
+                    <i class="fas fa-qrcode"></i> Skanuj kod Aztec
+                </button>
+                <button class="qr-button secondary" onclick="showManualEntry()">
+                    Wpisz ręcznie
+                </button>
+            </div>
+            
+            <!-- Manual Entry Section (initially hidden) -->
+            <div id="manualVehicleEntry" style="display: none;">
+                <h3>Wprowadź dane pojazdu ręcznie:</h3>
             <div class="form-row">
                 <div class="form-group">
                     <label>Rejestracja:</label>
@@ -989,6 +1094,34 @@
                     <input type="text" id="vehicleEngineCode">
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Pojemność (cm³):</label>
+                    <input type="text" id="vehicleCapacity" placeholder="np. 1997">
+                </div>
+                <div class="form-group">
+                    <label>Moc (kW):</label>
+                    <input type="text" id="vehiclePower" placeholder="np. 100">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Rodzaj paliwa:</label>
+                    <select id="vehicleFuel">
+                        <option value="">-- wybierz --</option>
+                        <option value="Benzyna">Benzyna</option>
+                        <option value="Diesel">Diesel</option>
+                        <option value="Benzyna+LPG">Benzyna + LPG</option>
+                        <option value="Elektryczny">Elektryczny</option>
+                        <option value="Hybryda">Hybryda</option>
+                        <option value="CNG">CNG</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Masa własna (kg):</label>
+                    <input type="text" id="vehicleWeight" placeholder="np. 1695">
+                </div>
+            </div>
             <div class="form-group">
                 <label>Właściciel:</label>
                 <input type="text" id="vehicleOwner" placeholder="Zacznij pisać nazwę klienta..." oninput="suggestClients(this.value, 'vehicleOwnerSuggestions')">
@@ -998,8 +1131,169 @@
                 <label>Przebieg początkowy (km):</label>
                 <input type="number" id="vehicleMileage" min="0">
             </div>
+            </div> <!-- Koniec manualVehicleEntry -->
+            
             <button class="btn" onclick="saveVehicle()">Zapisz</button>
             <button class="btn btn-danger" onclick="closeModal('vehicleModal')">Anuluj</button>
+        </div>
+    </div>
+    
+    <!-- Modal Aztec/QR Scanner v7 -->
+    <div id="qrScannerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('qrScannerModal')">&times;</span>
+            <h2>📱 Skanuj kod Aztec z dowodu rejestracyjnego</h2>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                <strong>ℹ️ Info:</strong> Polskie dowody rejestracyjne używają kodu <strong>Aztec 2D</strong> (nie QR). 
+                Program v7 obsługuje Aztec/QR (ZXing-WASM) oraz <strong>OCR screenów z carq.pl</strong> (Tesseract.js).
+            </div>
+
+            <!-- Zakładki: Zrób zdjęcie / Wybierz plik / Kamera na żywo -->
+            <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
+                <button id="tabCapture" class="btn btn-primary" onclick="switchScannerTab('capture')" style="flex:1; min-width: 120px; font-size: 15px; padding: 12px 8px;">
+                    <i class="fas fa-camera"></i> Zrób zdjęcie
+                </button>
+                <button id="tabPhoto" class="btn" onclick="switchScannerTab('photo')" style="flex:1; min-width: 120px; background: #6c757d; font-size: 15px; padding: 12px 8px;">
+                    <i class="fas fa-image"></i> Z galerii
+                </button>
+                <button id="tabCamera" class="btn" onclick="switchScannerTab('camera')" style="flex:1; min-width: 120px; background: #6c757d; font-size: 15px; padding: 12px 8px;">
+                    <i class="fas fa-video"></i> Kamera live
+                </button>
+                <button id="tabOcr" class="btn" onclick="switchScannerTab('ocr')" style="flex:1; min-width: 120px; background: #17a2b8; font-size: 15px; padding: 12px 8px; color: white;">
+                    <i class="fas fa-mobile-alt"></i> Screen carq.pl
+                </button>
+            </div>
+
+            <!-- Tab: Zrób zdjęcie (capture=environment - otwiera aparat BEZ uprawnień kamery) -->
+            <div id="scannerTabCapture">
+                <div style="text-align: center; padding: 20px; background: #f0f7ff; border: 2px dashed #007bff; border-radius: 12px;">
+                    <i class="fas fa-camera" style="font-size: 56px; color: #007bff; margin-bottom: 15px;"></i>
+                    <h4 style="margin: 0 0 10px;">Zrób zdjęcie kodu z dowodu</h4>
+                    <p style="color: #555; margin-bottom: 15px; font-size: 14px;">
+                        Kliknij przycisk poniżej - otworzy się aparat telefonu.<br>
+                        <strong>Sfotografuj sam kod Aztec</strong> (kwadrat z "okiem" w centrum).
+                    </p>
+                    <!-- To jest klucz: input z capture="environment" otwiera tylny aparat 
+                         BEZ pytania o uprawnienia kamery przeglądarki! -->
+                    <label style="display: inline-block; background: #007bff; color: white; padding: 15px 30px; 
+                           border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold;
+                           box-shadow: 0 3px 10px rgba(0,123,255,0.3);">
+                        <i class="fas fa-camera"></i> Otwórz aparat
+                        <input type="file" id="qrCaptureInput" accept="image/*" capture="environment" 
+                               style="display: none;" onchange="handleCaptureFile(this)">
+                    </label>
+                    <p style="color: #888; font-size: 12px; margin-top: 12px;">
+                        💡 Nie wymaga uprawnień kamery w przeglądarce!<br>
+                        Wskazówka: trzymaj telefon prosto, blisko kodu, unikaj odblasków.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tab: Z galerii (wybierz istniejące zdjęcie) -->
+            <div id="scannerTabPhoto" style="display: none;">
+                <div id="qrScannerContainer" class="qr-scanner-container">
+                    <div>
+                        <i class="fas fa-image" style="font-size: 48px; color: #007bff; margin-bottom: 15px;"></i>
+                        <p><strong>Przeciągnij zdjęcie lub kliknij aby wybrać z galerii</strong></p>
+                        <p style="color: #6c757d; font-size: 14px;">
+                            Obsługiwane formaty: JPG, PNG, WEBP
+                        </p>
+                    </div>
+                    <input type="file" id="qrFileInput" accept="image/*" style="display: none;">
+                    <canvas id="qrCanvas" style="display: none;"></canvas>
+                </div>
+            </div>
+
+            <!-- Tab: Kamera na żywo (wymaga HTTPS + uprawnień) -->
+            <div id="scannerTabCamera" style="display: none;">
+                <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 13px;">
+                    ⚠️ Kamera na żywo wymaga <strong>HTTPS</strong> i uprawnień przeglądarki. 
+                    Jeśli nie działa - użyj zakładki <strong>"Zrób zdjęcie"</strong>.
+                </div>
+                <div style="position: relative; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 10px;">
+                    <video id="cameraVideo" autoplay playsinline muted style="width: 100%; max-height: 400px; display: block;"></video>
+                    <canvas id="cameraCanvas" style="display: none;"></canvas>
+                    <div id="cameraScanOverlay" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                         width: 200px; height: 200px; border: 3px solid #00ff00; border-radius: 10px; opacity: 0.7;
+                         box-shadow: 0 0 0 9999px rgba(0,0,0,0.3);"></div>
+                </div>
+                <div style="text-align: center;">
+                    <button class="btn btn-primary" onclick="startCameraScanning()">
+                        <i class="fas fa-play"></i> Rozpocznij skanowanie
+                    </button>
+                    <button class="btn btn-danger" onclick="stopCameraScanning()">
+                        <i class="fas fa-stop"></i> Zatrzymaj
+                    </button>
+                    <p id="cameraScanStatus" style="margin-top: 10px; color: #6c757d;">
+                        Kliknij "Rozpocznij" i skieruj kamerę na kod Aztec z dowodu.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Tab: Screen z carq.pl (OCR Tesseract.js) -->
+            <div id="scannerTabOcr" style="display: none;">
+                <div style="background: #d1ecf1; border: 1px solid #17a2b8; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                    <strong>📱 Jak to działa:</strong><br>
+                    1. Otwórz <a href="https://carq.pl" target="_blank" style="color:#0056b3; font-weight:bold;">carq.pl</a> na telefonie<br>
+                    2. Zeskanuj kod Aztec z dowodu rejestracyjnego<br>
+                    3. Zrób <strong>screenshot ekranu</strong> z wynikami<br>
+                    4. Wróć tutaj i wczytaj ten screenshot
+                </div>
+                
+                <div style="text-align: center; padding: 20px; background: #f0f7ff; border: 2px dashed #17a2b8; border-radius: 12px;">
+                    <i class="fas fa-image" style="font-size: 48px; color: #17a2b8; margin-bottom: 15px;"></i>
+                    <h4 style="margin: 0 0 10px;">Wczytaj screenshot z carq.pl</h4>
+                    <p style="color: #555; margin-bottom: 15px; font-size: 14px;">
+                        Screenshot z wynikami skanowania kodu Aztec
+                    </p>
+                    <label style="display: inline-block; background: #17a2b8; color: white; padding: 15px 30px; 
+                           border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold;
+                           box-shadow: 0 3px 10px rgba(23,162,184,0.3);">
+                        <i class="fas fa-upload"></i> Wybierz screenshot
+                        <input type="file" id="ocrFileInput" accept="image/*" 
+                               style="display: none;" onchange="handleOCRFile(this)">
+                    </label>
+                    <br><br>
+                    <label style="display: inline-block; background: #28a745; color: white; padding: 12px 25px; 
+                           border-radius: 8px; font-size: 16px; cursor: pointer;
+                           box-shadow: 0 3px 10px rgba(40,167,69,0.3);">
+                        <i class="fas fa-camera"></i> Zrób zdjęcie ekranu
+                        <input type="file" id="ocrCaptureInput" accept="image/*" capture="environment"
+                               style="display: none;" onchange="handleOCRFile(this)">
+                    </label>
+                </div>
+                
+                <div id="ocrProgress" style="display: none; text-align: center; padding: 20px; margin-top: 15px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 36px; color: #17a2b8;"></i>
+                    <p id="ocrProgressText" style="font-size: 16px; color: #17a2b8; font-weight: bold;">
+                        Rozpoznaję tekst (OCR)... Proszę czekać ~5-10 sekund
+                    </p>
+                    <div id="ocrProgressBar" style="width: 80%; margin: 10px auto; height: 8px; background: #e0e0e0; border-radius: 4px;">
+                        <div id="ocrProgressFill" style="width: 0%; height: 100%; background: #17a2b8; border-radius: 4px; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+                
+                <div id="ocrPreview" style="display: none; margin-top: 15px;">
+                    <h4>📋 Rozpoznany tekst (surowy):</h4>
+                    <pre id="ocrRawText" style="background: #f8f9fa; border: 1px solid #ddd; padding: 10px; border-radius: 6px; 
+                         max-height: 200px; overflow-y: auto; font-size: 12px; white-space: pre-wrap;"></pre>
+                </div>
+            </div>
+
+            <div id="qrScanProgress" style="display: none; text-align: center; padding: 15px;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #007bff;"></i>
+                <p>Analizuję kod... (ZXing-WASM dekoduje Aztec, QR, DataMatrix...)</p>
+            </div>
+
+            <div id="qrResult" style="display: none;"></div>
+            <div id="qrError" style="display: none;"></div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn btn-danger" onclick="closeQRModal()">✖️ Zamknij</button>
+                <button class="btn btn-danger" onclick="forceCloseQRModal()" style="margin-left: 5px;">🚨 Wymuś zamknięcie</button>
+                <button class="btn" onclick="testQRParser()" style="background: #28a745; color: white; margin-left: 10px;">🧪 Test Parsera</button>
+            </div>
         </div>
     </div>
 
@@ -1616,6 +1910,11 @@
             currentEditingOrder = null;
             currentMileageVehicle = null;
             
+            // Wyczyść QR Scanner przy zamykaniu
+            if (modalId === 'qrScannerModal') {
+                cleanupQRScanner();
+            }
+            
             // Wyczyść dane AI przy zamykaniu modalu AI
             if (modalId === 'aiModal') {
                 aiExtractedPositions = [];
@@ -1718,6 +2017,10 @@
             document.getElementById('vehicleModel').value = '';
             document.getElementById('vehicleYear').value = '';
             document.getElementById('vehicleEngineCode').value = '';
+            document.getElementById('vehicleCapacity').value = '';
+            document.getElementById('vehiclePower').value = '';
+            document.getElementById('vehicleFuel').value = '';
+            document.getElementById('vehicleWeight').value = '';
             document.getElementById('vehicleOwner').value = '';
             document.getElementById('vehicleMileage').value = '';
             document.getElementById('vehicleModal').style.display = 'block';
@@ -1733,6 +2036,10 @@
             document.getElementById('vehicleModel').value = vehicle.model;
             document.getElementById('vehicleYear').value = vehicle.year || '';
             document.getElementById('vehicleEngineCode').value = vehicle.engineCode || '';
+            document.getElementById('vehicleCapacity').value = vehicle.capacity || '';
+            document.getElementById('vehiclePower').value = vehicle.power || '';
+            document.getElementById('vehicleFuel').value = vehicle.fuel || '';
+            document.getElementById('vehicleWeight').value = vehicle.weight || '';
             document.getElementById('vehicleOwner').value = vehicle.owner;
             document.getElementById('vehicleMileage').value = vehicle.mileage || '';
             document.getElementById('vehicleModal').style.display = 'block';
@@ -1745,6 +2052,10 @@
             const model = document.getElementById('vehicleModel').value.trim();
             const year = document.getElementById('vehicleYear').value;
             const engineCode = document.getElementById('vehicleEngineCode').value.trim();
+            const capacity = document.getElementById('vehicleCapacity').value.trim();
+            const power = document.getElementById('vehiclePower').value.trim();
+            const fuel = document.getElementById('vehicleFuel').value;
+            const weight = document.getElementById('vehicleWeight').value.trim();
             const owner = document.getElementById('vehicleOwner').value.trim();
             const mileage = document.getElementById('vehicleMileage').value;
             
@@ -1760,6 +2071,10 @@
                 model: model, 
                 year: year ? parseInt(year) : null,
                 engineCode: engineCode,
+                capacity: capacity || null,
+                power: power || null,
+                fuel: fuel || null,
+                weight: weight || null,
                 owner: owner,
                 mileage: mileage ? parseInt(mileage) : null,
                 mileageHistory: []
@@ -1838,7 +2153,11 @@
             vehicles.forEach(function(vehicle, index){
                 const row = tbody.insertRow();
                 const currentMileage = vehicle.mileage || '-';
-                row.innerHTML = '\n                    <td>'+escapeHtml(vehicle.registration)+'</td>\n                    <td>'+escapeHtml(vehicle.brand)+'</td>\n                    <td>'+escapeHtml(vehicle.model)+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.engineCode || '-')+'</td>\n                    <td>'+currentMileage+'</td>\n                    <td>'+escapeHtml(vehicle.owner)+'</td>\n                    <td class="action-buttons">\n                        <button class="btn btn-primary" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                ';
+                var silnikInfo = '';
+                if (vehicle.capacity) silnikInfo += vehicle.capacity + ' cm³';
+                if (vehicle.power) silnikInfo += (silnikInfo ? ' / ' : '') + vehicle.power + ' kW';
+                if (!silnikInfo) silnikInfo = vehicle.engineCode || '-';
+                row.innerHTML = '\n                    <td>'+escapeHtml(vehicle.registration)+'</td>\n                    <td>'+escapeHtml(vehicle.brand)+'</td>\n                    <td>'+escapeHtml(vehicle.model)+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+'</td>\n                    <td>'+escapeHtml(silnikInfo)+'</td>\n                    <td>'+escapeHtml(vehicle.fuel || '-')+'</td>\n                    <td>'+currentMileage+'</td>\n                    <td>'+escapeHtml(vehicle.owner)+'</td>\n                    <td class="action-buttons">\n                        <button class="btn btn-primary" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                ';
             });
         }
 
@@ -2416,13 +2735,46 @@
 
             const positionsRows = doc.positions.map(function(pos, idx){ return '\n                <tr>\n                    <td>'+(idx+1)+'. '+escapeHtml(pos.name)+(pos.notes ? '<div class="pos-notes">' + escapeHtml(pos.notes) + '</div>' : '')+'</td>\n                    <td>'+pos.quantity+' szt</td>\n                    <td class="price-col">'+pos.price.toFixed(2)+cs+'</td>\n                    <td class="price-col">'+(pos.quantity * pos.price).toFixed(2)+cs+'</td>\n                    <td>'+escapeHtml(pos.priority||'')+'</td>\n                </tr>\n            '; }).join('');
 
+            // Znajdź pełne dane pojazdu z bazy na podstawie doc.vehicle
+            var vehicleDetailsHtml = '';
+            if (doc.vehicle) {
+                // doc.vehicle to "MARKA MODEL (REJESTRACJA)" - szukaj w bazie
+                var matchedVehicle = null;
+                (vehicles || []).forEach(function(v) {
+                    if (!v) return;
+                    var vStr = v.brand + ' ' + v.model + ' (' + v.registration + ')';
+                    if (vStr === doc.vehicle || doc.vehicle.includes(v.registration)) {
+                        matchedVehicle = v;
+                    }
+                });
+                
+                if (matchedVehicle) {
+                    var vd = matchedVehicle;
+                    vehicleDetailsHtml = '<p><strong>Pojazd:</strong> ' + escapeHtml(vd.brand + ' ' + vd.model) + '</p>';
+                    vehicleDetailsHtml += '<p><strong>Nr rejestracyjny:</strong> ' + escapeHtml(vd.registration) + '</p>';
+                    if (vd.vin) vehicleDetailsHtml += '<p><strong>VIN:</strong> ' + escapeHtml(vd.vin) + '</p>';
+                    if (vd.year) vehicleDetailsHtml += '<p><strong>Rok produkcji:</strong> ' + vd.year + '</p>';
+                    if (vd.capacity) {
+                        var capStr = String(vd.capacity);
+                        vehicleDetailsHtml += '<p><strong>Pojemność:</strong> ' + escapeHtml(capStr) + (capStr.includes('cm') ? '' : ' cm³') + '</p>';
+                    }
+                    if (vd.power) {
+                        var pwrStr = String(vd.power);
+                        vehicleDetailsHtml += '<p><strong>Moc:</strong> ' + escapeHtml(pwrStr) + (pwrStr.includes('kW') ? '' : ' kW') + '</p>';
+                    }
+                    if (vd.fuel) vehicleDetailsHtml += '<p><strong>Paliwo:</strong> ' + escapeHtml(vd.fuel) + '</p>';
+                } else {
+                    vehicleDetailsHtml = '<p><strong>Pojazd:</strong> ' + escapeHtml(doc.vehicle) + '</p>';
+                }
+            }
+
             var paymentsHtml = '';
             if (doc.type !== 'kosztorys') {
                 const paid = Number(doc.paidAmount || 0);
                 const due = Math.max(0, Math.round((grossTotal - paid) * 100) / 100);
                 paymentsHtml = '\n                    <div class="document-footer" style="font-size:14px; color:#000;">\n                        <p><strong>Sposób zapłaty:</strong> '+escapeHtml(doc.paymentMethod || '-')+'</p>\n                        <p><strong>Wartość dokumentu:</strong> '+grossTotal.toFixed(2)+cs+'</p>\n                        <p><strong>Wpłacono:</strong> '+paid.toFixed(2)+cs+'</p>\n                        <p><strong>Pozostało do zapłaty:</strong> '+due.toFixed(2)+cs+'</p>\n                    </div>';
             }
-            printArea.innerHTML = '\n                <div class="document-header">\n                    <div class="company-info">\n                        <h2>Wystawiający: '+escapeHtml(doc.issuer)+'</h2>\n                        '+(doc.address ? '<p>'+escapeHtml(doc.address)+'</p>' : '')+'\n                        '+(doc.nip ? '<p>NIP: '+escapeHtml(doc.nip)+'</p>' : '')+'\n                        '+(phoneVal ? '<p>Tel: '+escapeHtml(phoneVal)+'</p>' : '')+'\n                        '+(emailVal ? '<p>Email: '+escapeHtml(emailVal)+'</p>' : '')+'\n                    </div>\n                    '+logoHtml+'\n                </div>\n                \n                <div class="document-title">'+doc.type.toUpperCase()+' '+escapeHtml(doc.number)+'</div>\n                \n                <div class="document-details">\n                    <div class="client-info">\n                        <h3>Klient</h3>\n                        <p><strong>Klient:</strong> '+escapeHtml(doc.client)+'</p>\n                        <p><strong>Pojazd:</strong> '+escapeHtml(doc.vehicle)+'</p>\n                        '+(doc.notes ? '<p><strong>Uwagi:</strong><br>'+escapeHtml(doc.notes).replace(/\n/g,'<br>')+'</p>' : '')+'\n                    </div>\n                    <div class="vehicle-info">\n                        <h3>Informacje</h3>\n                        <p><strong>Data:</strong> '+escapeHtml(doc.date)+'</p>\n                    </div>\n                </div>\n                \n                <table class="positions-table">\n                    <thead>\n                        <tr>\n                            <th>Pozycja</th>\n                            <th>Ilość</th>\n                            <th>Cena</th>\n                            <th>Suma</th>\n                            <th>Priorytet</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        '+positionsRows+'\n                    </tbody>\n                    <tfoot>\n                        '+summaryHtml+'\n                    </tfoot>\n                </table>\n                \n                '+paymentsHtml+'\n                '+(footer ? '<div class="document-footer">'+escapeHtml(footer)+'</div>' : '')+'\n            ';
+            printArea.innerHTML = '\n                <div class="document-header">\n                    <div class="company-info">\n                        <h2>Wystawiający: '+escapeHtml(doc.issuer)+'</h2>\n                        '+(doc.address ? '<p>'+escapeHtml(doc.address)+'</p>' : '')+'\n                        '+(doc.nip ? '<p>NIP: '+escapeHtml(doc.nip)+'</p>' : '')+'\n                        '+(phoneVal ? '<p>Tel: '+escapeHtml(phoneVal)+'</p>' : '')+'\n                        '+(emailVal ? '<p>Email: '+escapeHtml(emailVal)+'</p>' : '')+'\n                    </div>\n                    '+logoHtml+'\n                </div>\n                \n                <div class="document-title">'+doc.type.toUpperCase()+' '+escapeHtml(doc.number)+'</div>\n                \n                <div class="document-details">\n                    <div class="client-info">\n                        <h3>Klient</h3>\n                        <p><strong>Klient:</strong> '+escapeHtml(doc.client)+'</p>\n                        '+vehicleDetailsHtml+'\n                        '+(doc.notes ? '<p><strong>Uwagi:</strong><br>'+escapeHtml(doc.notes).replace(/\n/g,'<br>')+'</p>' : '')+'\n                    </div>\n                    <div class="vehicle-info">\n                        <h3>Informacje</h3>\n                        <p><strong>Data:</strong> '+escapeHtml(doc.date)+'</p>\n                    </div>\n                </div>\n                \n                <table class="positions-table">\n                    <thead>\n                        <tr>\n                            <th>Pozycja</th>\n                            <th>Ilość</th>\n                            <th>Cena</th>\n                            <th>Suma</th>\n                            <th>Priorytet</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        '+positionsRows+'\n                    </tbody>\n                    <tfoot>\n                        '+summaryHtml+'\n                    </tfoot>\n                </table>\n                \n                '+paymentsHtml+'\n                '+(footer ? '<div class="document-footer">'+escapeHtml(footer)+'</div>' : '')+'\n            ';
             
             
 
@@ -3530,6 +3882,11 @@
                 priceInput.addEventListener('input', updatePositionSum);
             }
         });
+
+        // ========================================
+        // STARE QR SCANNER FUNCTIONS v4 - USUNIĘTE w v5.0/v6/v7
+        // Zastąpione przez nowe funkcje Aztec Scanner na końcu pliku
+        // ========================================
 
         // Funkcje ustawień
         function loadLogo() {
@@ -5493,8 +5850,1942 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                 color: #4caf50;
                 margin-bottom: 10px;
             }
+            
+            /* Style dla QR Scanner */
+            .qr-scanner-section {
+                text-align: center;
+                border: 2px dashed #007bff;
+                border-radius: 8px;
+                padding: 20px;
+                background: #f8f9fa;
+            }
+            
+            .qr-button {
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                margin: 5px;
+                font-size: 16px;
+            }
+            
+            .qr-button.secondary {
+                background: #6c757d;
+            }
+            
+            .qr-button:hover {
+                opacity: 0.8;
+            }
+            
+            .qr-scanner-container {
+                text-align: center;
+                padding: 20px;
+                border: 2px dashed #ccc;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .qr-scanner-container:hover {
+                border-color: #007bff;
+                background-color: #f8f9fa;
+            }
+            
+            .qr-scanner-container.drag-over {
+                border-color: #007bff;
+                background-color: #e3f2fd;
+                transform: scale(1.02);
+            }
+            
+            .qr-preview {
+                margin: 10px 0;
+                text-align: center;
+            }
+            
+            .qr-preview img {
+                max-width: 200px;
+                max-height: 200px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+            
+            .qr-result {
+                background: #d4edda;
+                border: 1px solid #c3e6cb;
+                color: #155724;
+                padding: 10px;
+                border-radius: 4px;
+                margin: 10px 0;
+            }
+            
+            .qr-error {
+                background: #f8d7da;
+                border: 1px solid #f5c6cb;
+                color: #721c24;
+                padding: 10px;
+                border-radius: 4px;
+                margin: 10px 0;
+            }
+            
+            .qr-data-preview {
+                background: #fff;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 15px;
+                margin: 10px 0;
+                text-align: left;
+            }
+            
+            .qr-data-preview h4 {
+                margin: 0 0 10px 0;
+                color: #007bff;
+            }
+            
+            .qr-data-item {
+                margin: 5px 0;
+                padding: 5px;
+                background: #f8f9fa;
+                border-radius: 3px;
+            }
         `;
         document.head.appendChild(style);
+
+        // ============================================================
+        // AZTEC/QR SCANNER v7 - ZXing-WASM + Tesseract.js OCR
+        // Obsługuje: Aztec Code, QR Code, DataMatrix, PDF417 i inne
+        // ============================================================
+        
+        let cameraStream = null;
+        let cameraScanInterval = null;
+        let currentQRData = null;
+        let zxingReady = false;
+
+        // Inicjalizacja ZXing-WASM
+        (function initZXing() {
+            if (typeof ZXingWASM !== 'undefined') {
+                console.log('ZXing-WASM załadowany, wersja:', ZXingWASM.ZXING_WASM_VERSION || 'unknown');
+                zxingReady = true;
+            } else {
+                console.warn('ZXing-WASM nie załadowany - ponawiam za 2s...');
+                setTimeout(initZXing, 2000);
+            }
+        })();
+
+        // === PRZEŁĄCZANIE ZAKŁADEK ===
+        function switchScannerTab(tab) {
+            const tabs = ['Capture', 'Photo', 'Camera', 'Ocr'];
+            const panels = {
+                'capture': document.getElementById('scannerTabCapture'),
+                'photo': document.getElementById('scannerTabPhoto'),
+                'camera': document.getElementById('scannerTabCamera'),
+                'ocr': document.getElementById('scannerTabOcr')
+            };
+            
+            // Resetuj wszystkie zakładki
+            for (const t of tabs) {
+                const btn = document.getElementById('tab' + t);
+                if (btn) {
+                    btn.className = 'btn';
+                    btn.style.background = '#6c757d';
+                }
+            }
+            for (const key in panels) {
+                if (panels[key]) panels[key].style.display = 'none';
+            }
+            
+            // Aktywuj wybraną
+            const activeTabName = tab.charAt(0).toUpperCase() + tab.slice(1);
+            const activeBtn = document.getElementById('tab' + activeTabName);
+            if (activeBtn) {
+                activeBtn.className = 'btn btn-primary';
+                activeBtn.style.background = '';
+            }
+            if (panels[tab]) panels[tab].style.display = 'block';
+            
+            // Zatrzymaj kamerę jeśli nie jest aktywna
+            if (tab !== 'camera') stopCameraScanning();
+        }
+        
+        // === OBSŁUGA ZDJĘCIA Z APARATU (capture=environment) ===
+        function handleCaptureFile(input) {
+            if (input.files && input.files[0]) {
+                console.log('Capture: plik z aparatu', input.files[0].name, input.files[0].size, 'B');
+                processQRImage(input.files[0]);
+                // Reset inputa żeby można było zrobić kolejne zdjęcie
+                setTimeout(() => { input.value = ''; }, 1000);
+            }
+        }
+
+        // === CLEANUP ===
+        function cleanupQRScanner() {
+            const qrResult = document.getElementById('qrResult');
+            const qrError = document.getElementById('qrError');
+            const progress = document.getElementById('qrScanProgress');
+            if (qrResult) { qrResult.style.display = 'none'; qrResult.innerHTML = ''; }
+            if (qrError) { qrError.style.display = 'none'; qrError.innerHTML = ''; }
+            if (progress) { progress.style.display = 'none'; }
+            
+            const fileInput = document.getElementById('qrFileInput');
+            if (fileInput) { fileInput.value = ''; fileInput.onchange = null; }
+            const captureInput = document.getElementById('qrCaptureInput');
+            if (captureInput) { captureInput.value = ''; }
+            
+            const container = document.getElementById('qrScannerContainer');
+            if (container) {
+                container.onclick = null;
+                container.ondragover = null;
+                container.ondragleave = null;
+                container.ondrop = null;
+                container.classList.remove('drag-over');
+            }
+            
+            stopCameraScanning();
+            console.log('Aztec Scanner wyczyszczony');
+        }
+
+        // === POKAZYWANIE / UKRYWANIE ===
+        function showQRScanner() {
+            document.getElementById('qrScannerModal').style.display = 'block';
+            document.getElementById('manualVehicleEntry').style.display = 'none';
+            switchScannerTab('capture');
+            setupQRScanner();
+        }
+        
+        function showManualEntry() {
+            document.getElementById('manualVehicleEntry').style.display = 'block';
+            closeModal('qrScannerModal');
+        }
+
+        // === SETUP DRAG & DROP + FILE INPUT ===
+        function setupQRScanner() {
+            const container = document.getElementById('qrScannerContainer');
+            const fileInput = document.getElementById('qrFileInput');
+            
+            container.onclick = () => fileInput.click();
+            
+            fileInput.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) processQRImage(file);
+            };
+            
+            container.ondragover = (e) => {
+                e.preventDefault();
+                container.classList.add('drag-over');
+            };
+            container.ondragleave = (e) => {
+                e.preventDefault();
+                container.classList.remove('drag-over');
+            };
+            container.ondrop = (e) => {
+                e.preventDefault();
+                container.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) processQRImage(file);
+            };
+        }
+
+        // === PRZETWARZANIE OBRAZU (ZE ZDJĘCIA) - v7 Multi-Engine ===
+        function processQRImage(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                showQRError('Proszę wybrać plik obrazu (JPG, PNG, WEBP)');
+                return;
+            }
+            
+            // Pokaż progress
+            const progressEl = document.getElementById('qrScanProgress');
+            progressEl.style.display = 'block';
+            progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Analizuję obraz...</div>';
+            document.getElementById('qrResult').style.display = 'none';
+            document.getElementById('qrError').style.display = 'none';
+            
+            // Ładuj obraz
+            const img = new Image();
+            img.onload = async () => {
+                try {
+                    console.log('=== SCANNER v7 Multi-Engine ===');
+                    console.log('Obraz:', img.width, 'x', img.height);
+                    await scanMultiEngine(img, file);
+                } catch (e) {
+                    progressEl.style.display = 'none';
+                    console.error('Scan error:', e);
+                    showQRError('Błąd skanowania: ' + e.message);
+                }
+            };
+            img.onerror = () => {
+                progressEl.style.display = 'none';
+                showQRError('Nie udało się załadować obrazu.');
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        // === SILNIK 1: Natywne BarcodeDetector API (Chrome Android/macOS) ===
+        async function scanWithBarcodeDetectorAPI(imgElement) {
+            if (!('BarcodeDetector' in window)) {
+                console.log('BarcodeDetector API niedostępne w tej przeglądarce');
+                return null;
+            }
+            try {
+                // Sprawdź czy Aztec jest obsługiwany
+                const formats = await BarcodeDetector.getSupportedFormats();
+                console.log('BarcodeDetector formaty:', formats);
+                
+                const wantedFormats = formats.filter(f => 
+                    ['aztec', 'qr_code', 'data_matrix', 'pdf417'].includes(f)
+                );
+                if (wantedFormats.length === 0) {
+                    console.log('BarcodeDetector nie obsługuje Aztec/QR');
+                    return null;
+                }
+                
+                const detector = new BarcodeDetector({ formats: wantedFormats });
+                
+                // Próba z oryginalnym obrazem
+                let barcodes = await detector.detect(imgElement);
+                console.log('BarcodeDetector (oryginał):', barcodes.length, 'wyników');
+                
+                if (barcodes.length > 0) {
+                    return barcodes[0]; // { rawValue, format, boundingBox, cornerPoints }
+                }
+                
+                // Próba z canvas w różnych rozmiarach
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                for (const scale of [0.5, 0.75, 1.5, 2.0]) {
+                    const w = Math.round(imgElement.width * scale);
+                    const h = Math.round(imgElement.height * scale);
+                    if (w < 100 || h < 100 || w > 4000 || h > 4000) continue;
+                    
+                    canvas.width = w;
+                    canvas.height = h;
+                    ctx.drawImage(imgElement, 0, 0, w, h);
+                    
+                    barcodes = await detector.detect(canvas);
+                    console.log(`BarcodeDetector (${scale}x):`, barcodes.length, 'wyników');
+                    if (barcodes.length > 0) return barcodes[0];
+                }
+                
+                // Próba z kontrastem
+                for (const filter of ['contrast(2)', 'contrast(3) brightness(1.2)', 'grayscale(1) contrast(2.5)']) {
+                    canvas.width = imgElement.width;
+                    canvas.height = imgElement.height;
+                    ctx.filter = filter;
+                    ctx.drawImage(imgElement, 0, 0);
+                    ctx.filter = 'none';
+                    
+                    barcodes = await detector.detect(canvas);
+                    console.log(`BarcodeDetector (${filter}):`, barcodes.length, 'wyników');
+                    if (barcodes.length > 0) return barcodes[0];
+                }
+                
+                return null;
+            } catch (e) {
+                console.log('BarcodeDetector error:', e.message);
+                return null;
+            }
+        }
+
+        // === ORCHESTRATOR - Multi-Engine Scanner v7 ===
+        async function scanMultiEngine(img, originalFile) {
+            const progressEl = document.getElementById('qrScanProgress');
+            
+            // === SILNIK 1: BarcodeDetector API (natywny, najlepszy na Android Chrome) ===
+            progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Silnik 1/2: Natywny BarcodeDetector...</div>';
+            const nativeResult = await scanWithBarcodeDetectorAPI(img);
+            
+            if (nativeResult) {
+                progressEl.style.display = 'none';
+                console.log('✅ BarcodeDetector SUKCES:', nativeResult.format, 'rawValue len:', nativeResult.rawValue?.length);
+                
+                // BarcodeDetector zwraca rawValue jako string
+                // Dla polskiego Aztec to będą dane binarne jako string
+                const rawValue = nativeResult.rawValue;
+                
+                // Sprawdź czy to dane binarne (dużo znaków kontrolnych)
+                let nonPrintable = 0;
+                for (let i = 0; i < Math.min(rawValue.length, 50); i++) {
+                    if (rawValue.charCodeAt(i) < 32 || rawValue.charCodeAt(i) > 126) nonPrintable++;
+                }
+                
+                if (nonPrintable > 5) {
+                    // Dane binarne - konwertuj na Uint8Array
+                    const bytes = new Uint8Array(rawValue.length);
+                    for (let i = 0; i < rawValue.length; i++) {
+                        bytes[i] = rawValue.charCodeAt(i) & 0xFF;
+                    }
+                    console.log('BarcodeDetector: dane binarne, konwertowane na', bytes.length, 'bajtów');
+                    parseQRData(bytes, nativeResult.format);
+                } else {
+                    parseQRData(rawValue, nativeResult.format);
+                }
+                return;
+            }
+            
+            // === SILNIK 2: ZXing-WASM (fallback) ===
+            progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Silnik 2/2: ZXing-WASM (preprocessing)...</div>';
+            await scanWithZXingV6(img);
+        }
+
+        // === SILNIK 2: ZXing-WASM z agresywnym preprocessingiem ===
+        async function scanWithZXingV6(img) {
+            if (typeof ZXingWASM === 'undefined' || !ZXingWASM.readBarcodes) {
+                showQRError('Biblioteka ZXing-WASM nie jest jeszcze załadowana. Odśwież stronę.');
+                return;
+            }
+
+            const progressEl = document.getElementById('qrScanProgress');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            let foundResult = null;
+            let totalAttempts = 0;
+
+            // Helper: skanuj ImageData z ZXing
+            async function tryScan(imageData, label, formats) {
+                totalAttempts++;
+                try {
+                    const results = await ZXingWASM.readBarcodes(imageData, {
+                        tryHarder: true,
+                        tryRotate: true,
+                        tryInvert: true,
+                        tryDownscale: true,
+                        maxNumberOfSymbols: 5,
+                        formats: formats || ['Aztec', 'QRCode', 'DataMatrix', 'PDF417']
+                    });
+                    if (results && results.length > 0) {
+                        console.log('✅ SUKCES [' + label + ']:', results[0].format, 'bytes:', results[0].bytes?.length);
+                        return results[0];
+                    }
+                } catch(e) {
+                    console.log('⚠️ [' + label + '] błąd:', e.message);
+                }
+                return null;
+            }
+
+            // Helper: obraz -> ImageData na canvas z opcjami
+            function getImageData(sourceImg, w, h, filter) {
+                canvas.width = w;
+                canvas.height = h;
+                if (filter) ctx.filter = filter;
+                else ctx.filter = 'none';
+                ctx.drawImage(sourceImg, 0, 0, w, h);
+                ctx.filter = 'none';
+                return ctx.getImageData(0, 0, w, h);
+            }
+
+            // Helper: binaryzacja Otsu (adaptywny próg)
+            function otsuThreshold(imageData) {
+                const data = imageData.data;
+                const histogram = new Array(256).fill(0);
+                for (let i = 0; i < data.length; i += 4) {
+                    const gray = Math.round(data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                    histogram[gray]++;
+                }
+                const totalPixels = data.length / 4;
+                let sum = 0;
+                for (let i = 0; i < 256; i++) sum += i * histogram[i];
+                
+                let sumB = 0, wB = 0, maxVariance = 0, threshold = 128;
+                for (let t = 0; t < 256; t++) {
+                    wB += histogram[t];
+                    if (wB === 0) continue;
+                    const wF = totalPixels - wB;
+                    if (wF === 0) break;
+                    sumB += t * histogram[t];
+                    const mB = sumB / wB;
+                    const mF = (sum - sumB) / wF;
+                    const variance = wB * wF * (mB - mF) * (mB - mF);
+                    if (variance > maxVariance) {
+                        maxVariance = variance;
+                        threshold = t;
+                    }
+                }
+                return threshold;
+            }
+
+            // Helper: zastosuj binaryzację z progiem
+            function binarize(imageData, threshold) {
+                const d = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+                for (let i = 0; i < d.data.length; i += 4) {
+                    const gray = d.data[i] * 0.299 + d.data[i+1] * 0.587 + d.data[i+2] * 0.114;
+                    const bw = gray > threshold ? 255 : 0;
+                    d.data[i] = bw; d.data[i+1] = bw; d.data[i+2] = bw;
+                }
+                return d;
+            }
+
+            // Helper: unsharp mask (wyostrzanie)
+            function sharpen(imageData) {
+                const w = imageData.width, h = imageData.height;
+                const src = imageData.data;
+                const d = new ImageData(new Uint8ClampedArray(src), w, h);
+                const dst = d.data;
+                const amount = 1.5;
+                for (let y = 1; y < h - 1; y++) {
+                    for (let x = 1; x < w - 1; x++) {
+                        const idx = (y * w + x) * 4;
+                        for (let c = 0; c < 3; c++) {
+                            const center = src[idx + c] * 5;
+                            const neighbors = src[((y-1)*w+x)*4+c] + src[((y+1)*w+x)*4+c] + 
+                                              src[(y*w+x-1)*4+c] + src[(y*w+x+1)*4+c];
+                            const val = center - neighbors;
+                            dst[idx + c] = Math.max(0, Math.min(255, src[idx + c] + (val - src[idx + c]) * amount));
+                        }
+                    }
+                }
+                return d;
+            }
+
+            // Helper: wytnij kwadratowy region ze środka (ROI)
+            function cropCenter(sourceImg, ratio) {
+                const size = Math.min(sourceImg.width, sourceImg.height) * ratio;
+                const sx = (sourceImg.width - size) / 2;
+                const sy = (sourceImg.height - size) / 2;
+                const outW = Math.round(size);
+                canvas.width = outW;
+                canvas.height = outW;
+                ctx.filter = 'none';
+                ctx.drawImage(sourceImg, sx, sy, size, size, 0, 0, outW, outW);
+                return ctx.getImageData(0, 0, outW, outW);
+            }
+
+            // Helper: wytnij kwadrant (ćwiartkę)
+            function cropQuadrant(sourceImg, qx, qy) {
+                const w = Math.round(sourceImg.width / 2);
+                const h = Math.round(sourceImg.height / 2);
+                canvas.width = w;
+                canvas.height = h;
+                ctx.filter = 'none';
+                ctx.drawImage(sourceImg, qx * w, qy * h, w, h, 0, 0, w, h);
+                return ctx.getImageData(0, 0, w, h);
+            }
+
+            // === ETAP 1: Surowy obraz w oryginalnym rozmiarze ===
+            progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Etap 1/6: Skanowanie oryginału...</div>';
+            let imgData = getImageData(img, img.width, img.height);
+            foundResult = await tryScan(imgData, 'oryginał ' + img.width + 'x' + img.height);
+            
+            // === ETAP 2: Różne skale (ZXing lepiej radzi sobie z mniejszymi obrazami) ===
+            if (!foundResult) {
+                progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Etap 2/6: Skalowanie...</div>';
+                const scales = [0.75, 0.5, 1.5, 2.0, 0.33];
+                for (const s of scales) {
+                    const w = Math.round(img.width * s);
+                    const h = Math.round(img.height * s);
+                    if (w < 100 || h < 100 || w > 4000 || h > 4000) continue;
+                    imgData = getImageData(img, w, h);
+                    foundResult = await tryScan(imgData, 'skala ' + s + ' (' + w + 'x' + h + ')');
+                    if (foundResult) break;
+                }
+            }
+
+            // === ETAP 3: Kontrast + wyostrzanie ===
+            if (!foundResult) {
+                progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Etap 3/6: Kontrast i wyostrzanie...</div>';
+                const filters = [
+                    { f: 'contrast(2.0) brightness(1.1)', name: 'kontrast 2.0' },
+                    { f: 'contrast(3.0) brightness(1.2)', name: 'kontrast 3.0' },
+                    { f: 'contrast(1.5) saturate(0)', name: 'szarość + kontrast' },
+                    { f: 'contrast(2.5) saturate(0) brightness(1.3)', name: 'szarość agresywna' }
+                ];
+                for (const flt of filters) {
+                    // Pełny rozmiar
+                    imgData = getImageData(img, img.width, img.height, flt.f);
+                    foundResult = await tryScan(imgData, flt.name);
+                    if (foundResult) break;
+                    // Zmniejszony 50%
+                    const w2 = Math.round(img.width * 0.5);
+                    const h2 = Math.round(img.height * 0.5);
+                    imgData = getImageData(img, w2, h2, flt.f);
+                    foundResult = await tryScan(imgData, flt.name + ' @50%');
+                    if (foundResult) break;
+                }
+            }
+
+            // === ETAP 4: Binaryzacja Otsu + stałe progi ===
+            if (!foundResult) {
+                progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Etap 4/6: Binaryzacja...</div>';
+                const baseSizes = [
+                    [img.width, img.height],
+                    [Math.round(img.width * 0.5), Math.round(img.height * 0.5)],
+                    [Math.round(img.width * 1.5), Math.round(img.height * 1.5)]
+                ];
+                for (const [w, h] of baseSizes) {
+                    if (w < 100 || h < 100 || w > 4000 || h > 4000) continue;
+                    const base = getImageData(img, w, h);
+                    // Otsu
+                    const otsu = otsuThreshold(base);
+                    console.log('Otsu threshold:', otsu, 'dla', w, 'x', h);
+                    let binImg = binarize(base, otsu);
+                    foundResult = await tryScan(binImg, 'Otsu ' + otsu + ' @' + w + 'x' + h);
+                    if (foundResult) break;
+                    // Otsu -20 i +20
+                    binImg = binarize(base, Math.max(0, otsu - 20));
+                    foundResult = await tryScan(binImg, 'Otsu-20 @' + w + 'x' + h);
+                    if (foundResult) break;
+                    binImg = binarize(base, Math.min(255, otsu + 20));
+                    foundResult = await tryScan(binImg, 'Otsu+20 @' + w + 'x' + h);
+                    if (foundResult) break;
+                    // Stałe progi
+                    for (const t of [100, 128, 150, 180]) {
+                        binImg = binarize(base, t);
+                        foundResult = await tryScan(binImg, 'binaryzacja t=' + t + ' @' + w + 'x' + h);
+                        if (foundResult) break;
+                    }
+                    if (foundResult) break;
+                    // Wyostrzone + binaryzacja
+                    const sharpened = sharpen(base);
+                    const otsuS = otsuThreshold(sharpened);
+                    binImg = binarize(sharpened, otsuS);
+                    foundResult = await tryScan(binImg, 'sharp+Otsu @' + w + 'x' + h);
+                    if (foundResult) break;
+                }
+            }
+
+            // === ETAP 5: Wycinanie regionów (ROI) - kod może być w rogu lub centrum ===
+            if (!foundResult) {
+                progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Etap 5/6: Szukam kodu w regionach...</div>';
+                // Środek obrazu (różne proporcje)
+                for (const ratio of [0.5, 0.6, 0.7, 0.8, 0.4]) {
+                    imgData = cropCenter(img, ratio);
+                    foundResult = await tryScan(imgData, 'ROI środek ' + Math.round(ratio*100) + '%');
+                    if (foundResult) break;
+                    // + binaryzacja
+                    const ot = otsuThreshold(imgData);
+                    const binROI = binarize(imgData, ot);
+                    foundResult = await tryScan(binROI, 'ROI środek ' + Math.round(ratio*100) + '% bin');
+                    if (foundResult) break;
+                }
+                // Ćwiartki obrazu
+                if (!foundResult) {
+                    for (let qy = 0; qy < 2; qy++) {
+                        for (let qx = 0; qx < 2; qx++) {
+                            imgData = cropQuadrant(img, qx, qy);
+                            foundResult = await tryScan(imgData, 'kwadrant ' + qx + ',' + qy);
+                            if (foundResult) break;
+                            const ot = otsuThreshold(imgData);
+                            const binQ = binarize(imgData, ot);
+                            foundResult = await tryScan(binQ, 'kwadrant ' + qx + ',' + qy + ' bin');
+                            if (foundResult) break;
+                        }
+                        if (foundResult) break;
+                    }
+                }
+            }
+
+            // === ETAP 6: Skan z odwróconymi kolorami (negatyw) ===
+            if (!foundResult) {
+                progressEl.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Etap 6/6: Negatyw i obroty...</div>';
+                // Negatyw
+                imgData = getImageData(img, img.width, img.height, 'invert(1)');
+                foundResult = await tryScan(imgData, 'negatyw');
+                if (!foundResult) {
+                    imgData = getImageData(img, Math.round(img.width*0.5), Math.round(img.height*0.5), 'invert(1)');
+                    foundResult = await tryScan(imgData, 'negatyw @50%');
+                }
+                // Obroty 90°, 180°, 270°
+                if (!foundResult) {
+                    for (const angle of [90, 180, 270]) {
+                        const rad = angle * Math.PI / 180;
+                        const maxDim = Math.max(img.width, img.height);
+                        canvas.width = maxDim;
+                        canvas.height = maxDim;
+                        ctx.filter = 'none';
+                        ctx.clearRect(0, 0, maxDim, maxDim);
+                        ctx.save();
+                        ctx.translate(maxDim/2, maxDim/2);
+                        ctx.rotate(rad);
+                        ctx.drawImage(img, -img.width/2, -img.height/2);
+                        ctx.restore();
+                        imgData = ctx.getImageData(0, 0, maxDim, maxDim);
+                        foundResult = await tryScan(imgData, 'obrót ' + angle + '°');
+                        if (foundResult) break;
+                    }
+                }
+            }
+
+            // === WYNIK ===
+            progressEl.style.display = 'none';
+            console.log('Łącznie prób skanowania:', totalAttempts);
+
+            if (foundResult) {
+                console.log('SUKCES po', totalAttempts, 'próbach! Format:', foundResult.format);
+                console.log('Dane text:', foundResult.text?.substring(0, 100));
+                console.log('Dane bytes:', foundResult.bytes?.length, 'bajtów');
+                console.log('Bytes hex (20):', foundResult.bytes ? Array.from(foundResult.bytes.slice(0, 20)).map(b => b.toString(16).padStart(2,'0')).join(' ') : 'brak');
+                
+                // Dla Aztec z polskiego dowodu - preferuj surowe bajty
+                if (foundResult.bytes && foundResult.bytes.length > 10) {
+                    parseQRData(foundResult.bytes, foundResult.format);
+                } else if (foundResult.text) {
+                    parseQRData(foundResult.text, foundResult.format);
+                } else {
+                    showQRError('Odczytano kod, ale brak danych do parsowania.');
+                }
+            } else {
+                showQRError(`
+                    <h4>Nie znaleziono kodu Aztec/QR na obrazie</h4>
+                    <p>Wykonano <strong>${totalAttempts}</strong> prób skanowania z różnymi ustawieniami.</p>
+                    <p><strong>Wskazówki:</strong></p>
+                    <ul style="text-align: left; margin-left: 20px;">
+                        <li><strong>Zrób zdjęcie samego kodu</strong> - wykadruj tak, by kod zajmował większość zdjęcia</li>
+                        <li>Kod Aztec to kwadrat z "okiem byka" w centrum (nie QR!)</li>
+                        <li>Zrób zdjęcie z bliska, prostopadle, bez odblasków</li>
+                        <li>Dobre oświetlenie - bez cieni na kodzie</li>
+                        <li>Spróbuj kamery na żywo (zakładka "Kamera na żywo")</li>
+                        <li>Jeśli nic nie pomaga - wpisz dane ręcznie</li>
+                    </ul>
+                `);
+            }
+        }
+
+        // === KAMERA NA ŻYWO ===
+        async function startCameraScanning() {
+            const video = document.getElementById('cameraVideo');
+            const status = document.getElementById('cameraScanStatus');
+            
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                status.innerHTML = `<span style="color:red;">
+                    <strong>Kamera niedostępna.</strong><br>
+                    Możliwe przyczyny:<br>
+                    • Otwórz stronę przez <strong>HTTPS</strong> (kamera wymaga bezpiecznego połączenia)<br>
+                    • Użyj Chrome, Firefox lub Safari<br>
+                    • Na iOS użyj Safari (inne przeglądarki mogą blokować kamerę)
+                </span>`;
+                return;
+            }
+            
+            try {
+                status.innerHTML = 'Proszę o dostęp do kamery... (zaakceptuj uprawnienia w przeglądarce)';
+                
+                // Najpierw sprawdź uprawnienia
+                if (navigator.permissions) {
+                    try {
+                        const perm = await navigator.permissions.query({ name: 'camera' });
+                        console.log('Stan uprawnień kamery:', perm.state);
+                        if (perm.state === 'denied') {
+                            status.innerHTML = `<span style="color:red;">
+                                <strong>Dostęp do kamery zablokowany!</strong><br>
+                                Odblokuj w ustawieniach przeglądarki:<br>
+                                • Chrome: kliknij kłódkę obok adresu → Uprawnienia → Kamera → Zezwól<br>
+                                • Firefox: kliknij kłódkę → Uprawnienia → Kamera → Zezwól<br>
+                                • Safari: Ustawienia → Safari → Kamera → Zezwól<br>
+                                Potem odśwież stronę.
+                            </span>`;
+                            return;
+                        }
+                    } catch(e) { /* permissions API nie obsługiwane - ignoruj */ }
+                }
+                
+                // Próba 1: tylna kamera (idealna do skanowania)
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
+                } catch(e1) {
+                    console.log('Tylna kamera niedostępna, próbuję dowolną...', e1.message);
+                    // Próba 2: dowolna kamera
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                }
+                
+                video.srcObject = cameraStream;
+                await video.play();
+                
+                status.innerHTML = '<span style="color: #28a745;"><strong>✅ Kamera aktywna</strong> - skieruj na kod Aztec z dowodu rejestracyjnego...</span>';
+                
+                // Skanuj co 300ms - dual engine (BarcodeDetector + ZXing)
+                const canvas = document.getElementById('cameraCanvas');
+                const ctx = canvas.getContext('2d');
+                let scanCount = 0;
+                
+                // Inicjalizuj natywny BarcodeDetector jeśli dostępny
+                let nativeDetector = null;
+                if ('BarcodeDetector' in window) {
+                    try {
+                        const formats = await BarcodeDetector.getSupportedFormats();
+                        const aztecFormats = formats.filter(f => ['aztec','qr_code','data_matrix','pdf417'].includes(f));
+                        if (aztecFormats.length > 0) {
+                            nativeDetector = new BarcodeDetector({ formats: aztecFormats });
+                            console.log('Kamera: BarcodeDetector aktywny z formatami:', aztecFormats);
+                        }
+                    } catch(e) { console.log('BarcodeDetector init fail:', e.message); }
+                }
+                
+                cameraScanInterval = setInterval(async () => {
+                    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+                    
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0);
+                    scanCount++;
+                    
+                    try {
+                        // Próba 1: Natywny BarcodeDetector (dużo szybszy, lepszy z Aztec)
+                        if (nativeDetector) {
+                            const barcodes = await nativeDetector.detect(canvas);
+                            if (barcodes.length > 0) {
+                                const b = barcodes[0];
+                                console.log('KAMERA BarcodeDetector SUKCES:', b.format, 'rawValue len:', b.rawValue?.length);
+                                stopCameraScanning();
+                                status.innerHTML = '<span style="color: #28a745;">✅ Kod ' + b.format + ' znaleziony! (natywny)</span>';
+                                
+                                // Konwertuj dane binarne
+                                const raw = b.rawValue;
+                                let nonPrint = 0;
+                                for (let i = 0; i < Math.min(raw.length, 50); i++) {
+                                    if (raw.charCodeAt(i) < 32 || raw.charCodeAt(i) > 126) nonPrint++;
+                                }
+                                if (nonPrint > 5) {
+                                    const bytes = new Uint8Array(raw.length);
+                                    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i) & 0xFF;
+                                    parseQRData(bytes, b.format);
+                                } else {
+                                    parseQRData(raw, b.format);
+                                }
+                                return;
+                            }
+                        }
+                        
+                        // Próba 2: ZXing-WASM (fallback)
+                        if (typeof ZXingWASM !== 'undefined') {
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const results = await ZXingWASM.readBarcodes(imageData, {
+                                tryHarder: true, tryRotate: true, tryInvert: true,
+                                maxNumberOfSymbols: 3,
+                                formats: ['Aztec', 'QRCode', 'DataMatrix', 'PDF417']
+                            });
+                            
+                            if (results && results.length > 0) {
+                                const r = results[0];
+                                console.log('KAMERA ZXing SUKCES:', r.format, 'bajty:', r.bytes?.length);
+                                stopCameraScanning();
+                                status.innerHTML = '<span style="color: #28a745;">✅ Kod ' + r.format + ' znaleziony!</span>';
+                                if (r.bytes && r.bytes.length > 10) {
+                                    parseQRData(r.bytes, r.format);
+                                } else {
+                                    parseQRData(r.text, r.format);
+                                }
+                                return;
+                            }
+                        }
+                        
+                        if (scanCount % 10 === 0) {
+                            const engine = nativeDetector ? 'BarcodeDetector + ZXing' : 'ZXing';
+                            status.innerHTML = '<span style="color: #28a745;">Kamera aktywna (' + engine + ') - skanuję... (próba ' + scanCount + ')</span>';
+                        }
+                    } catch (e) {
+                        // Cicho ignoruj - następna klatka
+                    }
+                }, 300);
+                
+            } catch (error) {
+                console.error('Błąd kamery:', error);
+                let hint = '';
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    hint = '<br><br><strong>Jak naprawić:</strong><br>' +
+                        '• Odśwież stronę i zaakceptuj uprawnienia kamery<br>' +
+                        '• Na telefonie: Ustawienia → Przeglądarka → Uprawnienia → Kamera → Zezwól<br>' +
+                        '• Upewnij się, że strona jest otwarta przez HTTPS';
+                } else if (error.name === 'NotFoundError') {
+                    hint = '<br><br>Nie znaleziono kamery na tym urządzeniu.';
+                } else if (error.name === 'NotReadableError') {
+                    hint = '<br><br>Kamera jest używana przez inną aplikację. Zamknij inne aplikacje używające kamery.';
+                }
+                status.innerHTML = '<span style="color:red;"><strong>Błąd kamery:</strong> ' + error.message + hint + '</span>';
+            }
+        }
+        
+        function stopCameraScanning() {
+            if (cameraScanInterval) {
+                clearInterval(cameraScanInterval);
+                cameraScanInterval = null;
+            }
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(t => t.stop());
+                cameraStream = null;
+            }
+            const video = document.getElementById('cameraVideo');
+            if (video) video.srcObject = null;
+        }
+
+        // === DEKODER POLSKIEGO DOWODU REJESTRACYJNEGO ===
+        // Port z: polish-vehicle-registration-certificate-decoder (dex4er)
+        // + nrv2e-decompress - algorytm NRV2E do dekompresji danych binarnych
+        
+        // BitReader - czytnik bitów z bufora binarnego (port z Node.js na przeglądarkę)
+        class BitReader {
+            constructor(buffer, bufferBits = 8) {
+                this.buffer = buffer; // Uint8Array
+                this.bufferBits = bufferBits;
+                this.offset = 0;
+                this.currentBit = 0;
+                this.currentBuffer = 0;
+            }
+            get ended() {
+                return this.offset >= this.buffer.length && this.currentBit === 0;
+            }
+            readBit() {
+                if (this.currentBit === 0) {
+                    this.currentBuffer = 0;
+                    for (let b = this.bufferBits / 8 - 1; b >= 0; b--) {
+                        this.currentBuffer += this.readByte() << (8 * b);
+                    }
+                    this.currentBit = this.bufferBits;
+                }
+                return (this.currentBuffer >> --this.currentBit) & 1;
+            }
+            readByte() {
+                if (this.offset >= this.buffer.length) return 0;
+                return this.buffer[this.offset++];
+            }
+        }
+        
+        // NRV2E Decompress - algorytm dekompresji używany w polskich dowodach
+        function nrv2eDecompress(input, output) {
+            const bits = new BitReader(input, 8);
+            let outputPos = 0;
+            let lastOffset = 1;
+            while (!bits.ended) {
+                if (bits.readBit() === 1) {
+                    if (outputPos >= output.length) break;
+                    output[outputPos++] = bits.readByte();
+                } else {
+                    let offset = 1;
+                    let length = 0;
+                    for (;;) {
+                        offset = offset * 2 + bits.readBit();
+                        if (bits.readBit() === 1) break;
+                        offset = (offset - 1) * 2 + bits.readBit();
+                    }
+                    if (offset === 2) {
+                        offset = lastOffset;
+                        length = bits.readBit();
+                    } else {
+                        offset = (offset - 3) * 0x100 + bits.readByte();
+                        if (offset === 0xffffffff) break;
+                        length = (offset ^ 0xffffffff) & 1;
+                        offset >>= 1;
+                        lastOffset = ++offset;
+                    }
+                    if (length) {
+                        length = 1 + bits.readBit();
+                    } else if (bits.readBit() === 1) {
+                        length = 3 + bits.readBit();
+                    } else {
+                        length++;
+                        do { length = length * 2 + bits.readBit(); } while (bits.readBit() === 0);
+                        length += 3;
+                    }
+                    if (offset > 0x500) length++;
+                    let currentPos = outputPos - offset;
+                    if (currentPos < 0 || offset > outputPos) break;
+                    for (let i = 0; i <= length; i++) {
+                        if (outputPos >= output.length || currentPos >= output.length) break;
+                        output[outputPos++] = output[currentPos++];
+                    }
+                }
+            }
+        }
+        
+        // Mapowanie pól nowego formatu dowodu (indeks -> klucz)
+        const DR_FIELDS_NEW = [
+            'format', 'seriaDr', 'kodTerytorialny', 'organWydajacy1', 'organWydajacy2',
+            'organWydajacy3', 'organWydajacy4', 'rejestracja', 'marka', 'typ',
+            'wariant', 'wersja', 'model', 'vin', 'dataWydania',
+            'okresWaznosci', 'pelneNazwisko', 'imie', 'nazwisko', 'nazwaFirmy',
+            'pesel', 'kodPocztowy', 'miejscowosc', 'gmina', 'ulica',
+            'nrDomu', 'nrMieszkania', 'pelneNazwiskoWlasciciel', 'imieWlasciciel', 'nazwiskoWlasciciel',
+            'nazwaFirmyWlasciciel', 'peselWlasciciel', 'kodPocztowyWlasciciel', 'miejscowoscWlasciciel', 'gminaWlasciciel',
+            'ulicaWlasciciel', 'nrDomuWlasciciel', 'nrMieszkaniaWlasciciel', 'masaMax', 'masaDopuszczalna',
+            'masaZespolu', 'masaWlasna', 'kategoria', 'homologacja', 'liczbaOsi',
+            'masaPrzyczepyZHamulcem', 'masaPrzyczepyBezHamulca', 'stosunekMocy', 'pojemnosc', 'moc',
+            'paliwo', 'dataPierwszejRejestracji', 'miejscSiedzacych', 'miejscStojacych', 'rodzajPojazdu',
+            'przeznaczenie', 'rokProdukcji', 'dopuszczalnaLadownosc', 'dopNaciskOsi', 'nrKartyPojazdu',
+            'kodOCR', 'rodzajKod', 'podrodzajKod', 'przeznaczenieKod', 'nieznane1', 'nieznane2'
+        ];
+        
+        // Stary format (mniej pól)
+        const DR_FIELDS_OLD = [
+            'seriaDr', 'organWydajacy1', 'organWydajacy2', 'organWydajacy3', 'organWydajacy4',
+            'rejestracja', 'marka', 'typ', 'wariant', 'wersja',
+            'model', 'vin', 'dataWydania', 'okresWaznosci', 'pelneNazwisko',
+            'pesel', 'adres1', 'adres2', 'pelneNazwiskoWlasciciel', 'peselWlasciciel',
+            'adresWlasciciel1', 'adresWlasciciel2', 'masaMax', 'masaDopuszczalna', 'masaZespolu',
+            'masaWlasna', 'kategoria', 'homologacja', 'liczbaOsi', 'masaPrzyczepyZHamulcem',
+            'masaPrzyczepyBezHamulca', 'stosunekMocy', 'pojemnosc', 'moc', 'paliwo',
+            'dataPierwszejRejestracji', /*skip*/ 'miejscSiedzacych', 'miejscStojacych', 'rodzajPojazdu',
+            'przeznaczenie', 'rokProdukcji', 'dopuszczalnaLadownosc', 'dopNaciskOsi', 'nrKartyPojazdu', 'kodOCR'
+        ];
+        
+        const FUEL_CODES = {
+            'P': 'Benzyna', 'D': 'Diesel (ON)', 'M': 'Mieszanka',
+            'LPG': 'LPG (propan-butan)', 'CNG': 'CNG (metan)', 'H': 'Wodór',
+            'LNG': 'LNG (metan)', 'BD': 'Biodiesel', 'E85': 'Etanol',
+            'EE': 'Elektryczny', '999': 'Inne'
+        };
+        
+        // Główna funkcja dekodowania surowych danych z Aztec kodu polskiego dowodu
+        function decodePolishRegistrationAztec(rawBytes) {
+            try {
+                // rawBytes to Uint8Array z ZXing (surowe bajty)
+                // Lub string base64
+                let binInput;
+                
+                if (rawBytes instanceof Uint8Array) {
+                    binInput = rawBytes;
+                } else if (typeof rawBytes === 'string') {
+                    // Próba base64 decode
+                    try {
+                        const binary = atob(rawBytes);
+                        binInput = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) {
+                            binInput[i] = binary.charCodeAt(i);
+                        }
+                    } catch(e) {
+                        console.log('Nie base64, próbuję jako surowy tekst');
+                        return null;
+                    }
+                } else {
+                    return null;
+                }
+                
+                if (binInput.length < 10) return null;
+                
+                // Pierwsze 4 bajty = długość outputu (uint32 little-endian)
+                const outputLength = binInput[0] | (binInput[1] << 8) | (binInput[2] << 16) | (binInput[3] << 24);
+                
+                console.log('NRV2E: wejście=' + binInput.length + ' bajtów, oczekiwany output=' + outputLength + ' bajtów');
+                
+                // Walidacja - output nie powinien być absurdalnie duży
+                if (outputLength <= 0 || outputLength > 100000) {
+                    console.log('NRV2E: nieprawidłowa długość outputu');
+                    return null;
+                }
+                
+                const output = new Uint8Array(outputLength);
+                const compressedInput = binInput.slice(4);
+                
+                nrv2eDecompress(compressedInput, output);
+                
+                // Dekoduj UTF-16LE na tekst
+                let text = '';
+                for (let i = 0; i < output.length - 1; i += 2) {
+                    const charCode = output[i] | (output[i + 1] << 8);
+                    if (charCode === 0) break; // null terminator
+                    text += String.fromCharCode(charCode);
+                }
+                
+                console.log('NRV2E dekompresja OK, tekst (' + text.length + ' znaków):', text.substring(0, 200));
+                
+                // Podziel po separatorze | lub nowa linia
+                const fields = text.split(/\||\r?\n/);
+                const isNewFormat = fields[0] && fields[0].startsWith('XX');
+                const fieldMap = isNewFormat ? DR_FIELDS_NEW : DR_FIELDS_OLD;
+                
+                console.log('Format dowodu:', isNewFormat ? 'NOWY (XX)' : 'STARY');
+                console.log('Pola:', fields.length);
+                
+                // Mapuj pola na obiekt
+                const result = {};
+                for (let i = 0; i < fields.length && i < fieldMap.length; i++) {
+                    const key = fieldMap[i];
+                    const value = fields[i] || '';
+                    if (key && value && value !== '---') {
+                        result[key] = value;
+                    }
+                }
+                
+                // Dodaj opis paliwa
+                if (result.paliwo && FUEL_CODES[result.paliwo]) {
+                    result.paliwoOpis = FUEL_CODES[result.paliwo];
+                }
+                
+                return result;
+                
+            } catch (error) {
+                console.error('Błąd dekodowania NRV2E:', error);
+                return null;
+            }
+        }
+        
+        // Konwertuj zdekodowane dane dowodu na format vehicleData
+        function drDataToVehicleData(dr) {
+            const v = {};
+            if (dr.rejestracja) v.registration = dr.rejestracja;
+            if (dr.marka) v.brand = dr.marka;
+            if (dr.model) v.model = dr.model;
+            if (dr.vin) v.vin = dr.vin;
+            if (dr.pojemnosc) v.engineCapacity = dr.pojemnosc.replace(',00', '').replace(',', '.') + ' cm³';
+            if (dr.moc) v.power = dr.moc.replace(',00', '').replace(',', '.');
+            if (dr.paliwo) v.fuel = dr.paliwo;
+            if (dr.paliwoOpis) v.fuelDisplay = dr.paliwoOpis;
+            if (dr.masaWlasna) v.weight = dr.masaWlasna;
+            if (dr.masaDopuszczalna) v.maxMass = dr.masaDopuszczalna;
+            if (dr.dataPierwszejRejestracji) {
+                v.firstRegistration = dr.dataPierwszejRejestracji;
+                const match = dr.dataPierwszejRejestracji.match(/(\d{4})/);
+                if (match) v.year = parseInt(match[1]);
+            }
+            if (dr.rokProdukcji && dr.rokProdukcji !== '---') {
+                v.year = parseInt(dr.rokProdukcji);
+            }
+            if (dr.typ) v.modelVariant = dr.typ;
+            if (dr.kategoria) v.category = dr.kategoria;
+            
+            // Dane właściciela (opcjonalne, do wyświetlenia)
+            if (dr.pelneNazwisko) v.owner = dr.pelneNazwisko;
+            
+            return v;
+        }
+
+        // === PARSER DANYCH Z KODU AZTEC/QR ===
+        function parseQRData(rawData, format) {
+            try {
+                console.log('=== PARSER v7 ===');
+                console.log('Format kodu:', format || 'nieznany');
+                console.log('Typ danych:', rawData instanceof Uint8Array ? 'Uint8Array[' + rawData.length + ']' : typeof rawData);
+                if (typeof rawData === 'string') {
+                    console.log('Surowe dane (pierwsze 200 znaków):', rawData.substring(0, 200));
+                    console.log('Długość:', rawData.length);
+                } else if (rawData instanceof Uint8Array) {
+                    console.log('Surowe bajty (pierwsze 20):', Array.from(rawData.slice(0, 20)).map(b => b.toString(16).padStart(2,'0')).join(' '));
+                }
+                
+                // ============================================================
+                // METODA 0: DEKODER POLSKIEGO DOWODU REJESTRACYJNEGO (NRV2E)
+                // Próbuj ZAWSZE najpierw - to jest najbardziej prawdopodobny scenariusz
+                // ============================================================
+                
+                // Dane z Aztec mogą przyjść jako:
+                // a) surowe bajty (Uint8Array) - bezpośrednio z ZXing bytes
+                // b) string base64 - tekst z zakodowanymi danymi binarnymi
+                // c) string z nieczytelnymi znakami - surowe bajty skonwertowane na string
+                
+                let drDecoded = null;
+                
+                // Próba A: Jeśli rawData to string, może zawierać binarne dane
+                if (typeof rawData === 'string' && rawData.length > 20) {
+                    // Sprawdź czy to mogą być dane binarne (dużo znaków kontrolnych)
+                    let nonPrintable = 0;
+                    for (let i = 0; i < Math.min(rawData.length, 50); i++) {
+                        if (rawData.charCodeAt(i) < 32 || rawData.charCodeAt(i) > 126) nonPrintable++;
+                    }
+                    
+                    if (nonPrintable > 5) {
+                        console.log('Wykryto dane binarne (' + nonPrintable + ' bajtów kontrolnych w pierwszych 50)');
+                        // Konwertuj string na Uint8Array (bajt po bajcie)
+                        const bytes = new Uint8Array(rawData.length);
+                        for (let i = 0; i < rawData.length; i++) {
+                            bytes[i] = rawData.charCodeAt(i) & 0xFF;
+                        }
+                        drDecoded = decodePolishRegistrationAztec(bytes);
+                    }
+                    
+                    // Próba base64
+                    if (!drDecoded) {
+                        // Sprawdź czy to wygląda na base64
+                        const b64cleaned = rawData.replace(/\s/g, '');
+                        if (/^[A-Za-z0-9+/=]{20,}$/.test(b64cleaned)) {
+                            console.log('Próbuję dekodowanie base64...');
+                            drDecoded = decodePolishRegistrationAztec(b64cleaned);
+                        }
+                    }
+                }
+                
+                // Próba B: Surowe bajty (Uint8Array) z ZXing
+                if (!drDecoded && rawData instanceof Uint8Array) {
+                    console.log('Dane jako Uint8Array, dekodowanie NRV2E...');
+                    drDecoded = decodePolishRegistrationAztec(rawData);
+                }
+                
+                if (drDecoded && (drDecoded.rejestracja || drDecoded.vin || drDecoded.marka)) {
+                    console.log('✅ DEKODER POLSKIEGO DOWODU SUKCES!', drDecoded);
+                    const vehicleData = drDataToVehicleData(drDecoded);
+                    vehicleData._format = format || 'Aztec';
+                    vehicleData._rawDrData = drDecoded; // zachowaj pełne dane
+                    showQRDataPreview(vehicleData, format);
+                    return;
+                }
+                
+                console.log('NRV2E dekodowanie nie powiodło się, próbuję parsowanie tekstowe...');
+                
+                // Konwertuj rawData na string jeśli to Uint8Array
+                let rawString = rawData;
+                if (rawData instanceof Uint8Array) {
+                    rawString = '';
+                    for (let i = 0; i < rawData.length; i++) {
+                        rawString += String.fromCharCode(rawData[i]);
+                    }
+                }
+                rawData = rawString; // od teraz rawData to zawsze string
+                
+                // ============================================================
+                // METODA 1+: FALLBACK - parsowanie tekstowe
+                // ============================================================
+                
+                const vehicleData = {};
+                let parsed = false;
+                
+                // Metoda 1: Standardowy format KLUCZ:WARTOŚĆ z dowodu
+                if (typeof rawData === 'string' && rawData.includes(':')) {
+                    let lines;
+                    if (rawData.includes('\n')) {
+                        lines = rawData.split('\n');
+                    } else if (rawData.includes('\r')) {
+                        lines = rawData.split('\r');
+                    } else if (rawData.includes('|')) {
+                        lines = rawData.split('|');
+                    } else if (rawData.includes('A:') && (rawData.includes('E:') || rawData.includes('C.'))) {
+                        lines = rawData.split(/(?=[A-Z]\.?[0-9]*\.?[0-9]*:)/);
+                    } else {
+                        lines = rawData.split(/\x1d|\x1e|\x00/); // GS, RS, NULL separators
+                        if (lines.length <= 1) lines = [rawData];
+                    }
+                    
+                    console.log('Podzielone linie:', lines);
+                    
+                    lines.forEach(line => {
+                        line = line.trim();
+                        if (!line) return;
+                        
+                        const colonIndex = line.indexOf(':');
+                        if (colonIndex === -1) return;
+                        
+                        const key = line.substring(0, colonIndex).trim().toUpperCase();
+                        const value = line.substring(colonIndex + 1).trim();
+                        if (!value) return;
+                        
+                        console.log('Pole:', key, '=', value);
+                        
+                        // Mapowanie pól polskiego dowodu rejestracyjnego
+                        switch(key) {
+                            case 'A': vehicleData.registration = value; break;
+                            case 'B': vehicleData.firstRegistration = value; break;
+                            case 'C.1.1': case 'C1.1': vehicleData.brand = value; break;
+                            case 'C.1.2': case 'C1.2': vehicleData.model = value; break;
+                            case 'C.1.3': case 'C1.3': vehicleData.modelVariant = value; break;
+                            case 'D.1': case 'D1': if (!vehicleData.brand) vehicleData.brand = value; break;
+                            case 'D.2': case 'D2': if (!vehicleData.model) vehicleData.model = value; break;
+                            case 'D.3': case 'D3': vehicleData.modelVariant = value; break;
+                            case 'E': vehicleData.vin = value; break;
+                            case 'F.1': case 'F1': vehicleData.mass = value; break;
+                            case 'F.2': case 'F2': vehicleData.maxMass = value; break;
+                            case 'G': vehicleData.weight = value; break;
+                            case 'I': vehicleData.firstRegistration = value; break;
+                            case 'P.1': case 'P1': vehicleData.engineCapacity = value; break;
+                            case 'P.2': case 'P2': vehicleData.power = value; break;
+                            case 'P.3': case 'P3': vehicleData.fuel = value; break;
+                        }
+                    });
+                    
+                    parsed = Object.keys(vehicleData).length > 0;
+                }
+                
+                // Metoda 2: Szukaj VIN bezpośrednio w surowych danych
+                if (!parsed || !vehicleData.vin) {
+                    const vinMatch = rawData.match(/[A-HJ-NPR-Z0-9]{17}/);
+                    if (vinMatch) {
+                        vehicleData.vin = vinMatch[0];
+                        console.log('Znaleziony VIN w surowych danych:', vehicleData.vin);
+                    }
+                }
+                
+                // Metoda 3: Dane binarne/zakodowane z polskiego Aztec
+                // Polski dowód może kodować dane w specjalnym formacie binarnym
+                if (!parsed && rawData.length > 20) {
+                    // Spróbuj znaleźć czytelne fragmenty w danych
+                    const readableChunks = rawData.match(/[A-Za-z0-9ąćęłńóśźżĄĆĘŁŃÓŚŹŻ\s\-\.]{3,}/g);
+                    if (readableChunks) {
+                        console.log('Czytelne fragmenty:', readableChunks);
+                        vehicleData.rawReadable = readableChunks.join(' | ');
+                    }
+                }
+                
+                // Post-processing
+                if (vehicleData.firstRegistration) {
+                    const dateMatch = vehicleData.firstRegistration.match(/(\d{4})/);
+                    if (dateMatch) vehicleData.year = parseInt(dateMatch[1]);
+                }
+                
+                if (vehicleData.engineCapacity && !vehicleData.engineCapacity.includes('cm')) {
+                    vehicleData.engineCapacity = vehicleData.engineCapacity + ' cm³';
+                }
+                
+                // Mapuj paliwo na polskie nazwy
+                if (vehicleData.fuel) {
+                    const fuelMap = {
+                        'P': 'Benzyna', 'D': 'Diesel', 'P LPG': 'Benzyna + LPG',
+                        'D LPG': 'Diesel + LPG', 'M': 'Mieszanka', 'EE': 'Elektryczny',
+                        'P CNG': 'Benzyna + CNG'
+                    };
+                    vehicleData.fuelDisplay = fuelMap[vehicleData.fuel.toUpperCase()] || vehicleData.fuel;
+                }
+                
+                console.log('Sparsowane dane:', vehicleData);
+                
+                // Wyświetl wyniki
+                const hasUsefulData = vehicleData.registration || vehicleData.vin || vehicleData.brand;
+                
+                if (hasUsefulData) {
+                    showQRDataPreview(vehicleData, format);
+                } else if (vehicleData.rawReadable) {
+                    showQRError(`
+                        <h4>⚠️ Odczytano kod, ale dane wymagają ręcznej interpretacji</h4>
+                        <p>Format kodu: <strong>${format || 'nieznany'}</strong></p>
+                        <p>Czytelne fragmenty:</p>
+                        <pre style="background:#f8f9fa; padding:10px; border-radius:4px; white-space:pre-wrap; word-break:break-all;">${vehicleData.rawReadable}</pre>
+                        <p>Surowe dane:</p>
+                        <pre style="background:#f8f9fa; padding:10px; border-radius:4px; white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto;">${escapeHtml(rawData)}</pre>
+                        <p><strong>Uwaga:</strong> Polskie dowody rejestracyjne mogą kodować dane w formacie binarnym wymagającym specjalnego dekodera (np. dekoderaztec.pl).</p>
+                    `);
+                } else {
+                    showQRError(`
+                        <h4>Odczytano kod ${format || ''}, ale nie rozpoznano formatu danych</h4>
+                        <p>Surowe dane:</p>
+                        <pre style="background:#f8f9fa; padding:10px; border-radius:4px; white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto;">${escapeHtml(rawData)}</pre>
+                        <p><strong>Info:</strong> Kod Aztec z polskiego dowodu może zawierać dane binarne. 
+                        Jeśli widzisz krzaczki - to normalne, dane wymagają specjalnego dekodowania. 
+                        Program odczytał kod pomyślnie, ale interpretacja danych wymaga dodatkowego przetwarzania.</p>
+                    `);
+                }
+                
+            } catch (error) {
+                showQRError('Błąd parsowania: ' + error.message + '<br>Dane: <pre>' + escapeHtml(rawData) + '</pre>');
+            }
+        }
+        
+        // escapeHtml() jest zdefiniowana wyżej w pliku (linia ~2429)
+
+        // === PODGLĄD DANYCH ===
+        function showQRDataPreview(data, format) {
+            const resultDiv = document.getElementById('qrResult');
+            
+            let html = '<div class="qr-result">';
+            html += '<h4>✅ Odczytano dane pojazdu' + (format ? ' (kod ' + format + ')' : '') + ':</h4>';
+            html += '<div class="qr-data-preview">';
+            
+            if (data.registration) html += '<div class="qr-data-item"><strong>Rejestracja (A):</strong> ' + data.registration + '</div>';
+            if (data.brand) html += '<div class="qr-data-item"><strong>Marka (C.1.1):</strong> ' + data.brand + '</div>';
+            if (data.model) html += '<div class="qr-data-item"><strong>Model (C.1.2):</strong> ' + data.model + '</div>';
+            if (data.modelVariant) html += '<div class="qr-data-item"><strong>Wersja (C.1.3):</strong> ' + data.modelVariant + '</div>';
+            if (data.year) html += '<div class="qr-data-item"><strong>Rok:</strong> ' + data.year + '</div>';
+            if (data.firstRegistration) html += '<div class="qr-data-item"><strong>I rejestracja (B):</strong> ' + data.firstRegistration + '</div>';
+            if (data.vin) html += '<div class="qr-data-item"><strong>VIN (E):</strong> ' + data.vin + '</div>';
+            if (data.engineCapacity) html += '<div class="qr-data-item"><strong>Pojemność (P.1):</strong> ' + data.engineCapacity + '</div>';
+            if (data.power) html += '<div class="qr-data-item"><strong>Moc (P.2):</strong> ' + data.power + ' kW</div>';
+            if (data.fuel) html += '<div class="qr-data-item"><strong>Paliwo (P.3):</strong> ' + (data.fuelDisplay || data.fuel) + '</div>';
+            if (data.weight || data.mass) html += '<div class="qr-data-item"><strong>Masa (G):</strong> ' + (data.weight || data.mass) + ' kg</div>';
+            if (data.maxMass) html += '<div class="qr-data-item"><strong>Masa max (F.2):</strong> ' + data.maxMass + ' kg</div>';
+            
+            html += '</div>';
+            html += '<div style="margin-top: 15px;">';
+            html += '<button class="btn" onclick=\'fillVehicleForm(' + JSON.stringify(data).replace(/'/g, "\\'") + ')\'>✅ Wypełnij formularz</button> ';
+            html += '<button class="btn" style="background:#6c757d;" onclick="showManualEntry()">✏️ Edytuj ręcznie</button>';
+            html += '</div></div>';
+            
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = 'block';
+            document.getElementById('qrError').style.display = 'none';
+        }
+
+        // === WYPEŁNIANIE FORMULARZA ===
+        function fillVehicleForm(data) {
+            currentQRData = data;
+            
+            if (data.registration) document.getElementById('vehicleRegistration').value = data.registration;
+            if (data.vin) document.getElementById('vehicleVin').value = data.vin;
+            if (data.brand) document.getElementById('vehicleBrand').value = data.brand;
+            if (data.model) {
+                let modelValue = data.model;
+                if (data.modelVariant) modelValue += ' ' + data.modelVariant;
+                document.getElementById('vehicleModel').value = modelValue;
+            }
+            if (data.year) document.getElementById('vehicleYear').value = data.year;
+            
+            // Pojemność silnika → pole "Kod silnika" (engineCode) + nowe pole "Pojemność"
+            if (data.engineCapacity) {
+                const cap = data.engineCapacity.replace(/[^\d]/g, '');
+                document.getElementById('vehicleEngineCode').value = cap;
+                document.getElementById('vehicleCapacity').value = cap;
+            }
+            
+            // Moc silnika
+            if (data.power) {
+                document.getElementById('vehiclePower').value = data.power;
+            }
+            
+            // Paliwo - mapuj na wartości selecta
+            if (data.fuelDisplay || data.fuel) {
+                const fuelSelect = document.getElementById('vehicleFuel');
+                const fuelText = (data.fuelDisplay || data.fuel || '').toLowerCase();
+                if (fuelText.includes('diesel') || fuelText.includes('olej') || data.fuel === 'D') {
+                    fuelSelect.value = 'Diesel';
+                } else if (fuelText.includes('lpg')) {
+                    fuelSelect.value = 'Benzyna+LPG';
+                } else if (fuelText.includes('benzyn') || data.fuel === 'P') {
+                    fuelSelect.value = 'Benzyna';
+                } else if (fuelText.includes('elektr') || data.fuel === 'E') {
+                    fuelSelect.value = 'Elektryczny';
+                } else if (fuelText.includes('hybry')) {
+                    fuelSelect.value = 'Hybryda';
+                }
+            }
+            
+            // Masa
+            if (data.weight) {
+                document.getElementById('vehicleWeight').value = data.weight;
+            }
+            
+            closeModal('qrScannerModal');
+            document.getElementById('manualVehicleEntry').style.display = 'block';
+            alert('✅ Dane pojazdu wypełnione z kodu ' + (data._format || 'Aztec') + '!');
+        }
+
+        // === BŁĘDY ===
+        function showQRError(message) {
+            const errorDiv = document.getElementById('qrError');
+            errorDiv.innerHTML = '<div class="qr-error">' + message + '</div>';
+            errorDiv.style.display = 'block';
+            document.getElementById('qrResult').style.display = 'none';
+            document.getElementById('qrScanProgress').style.display = 'none';
+        }
+
+        // === ZAMYKANIE MODALA ===
+        function closeQRModal() {
+            try {
+                cleanupQRScanner();
+                closeModal('qrScannerModal');
+            } catch (error) {
+                forceCloseQRModal();
+            }
+        }
+        
+        function forceCloseQRModal() {
+            try {
+                const modal = document.getElementById('qrScannerModal');
+                if (modal) { modal.style.display = 'none'; modal.style.visibility = 'hidden'; }
+                cleanupQRScanner();
+                console.log('QR Modal zamknięty WYMUSZONE');
+            } catch (error) {
+                if (confirm('Nie można zamknąć modalu. Przeładować stronę?')) location.reload();
+            }
+        }
+
+        // === TEST PARSERA ===
+        function testQRParser() {
+            console.log('🧪 TEST PARSERA v7');
+            
+            const testData = `A:DLW HF31
+B:2008-02-08
+C.1.1:CITROEN
+C.1.2:C4 PICASSO
+E:VFZUHFRHXS206312
+F.2:2040
+G:1635
+P.1:1997
+P.3:P LPG`;
+            
+            console.log('Test z danymi CITROEN C4 PICASSO:');
+            parseQRData(testData, 'Aztec (TEST)');
+            console.log('✅ Test parsera zakończony!');
+        }
+
+        // === OCR CARQ.PL - Tesseract.js v7.2 ===
+        
+        let tesseractWorker = null;
+        let tesseractReady = false;
+        let tesseractInitializing = false;
+        
+        // Inicjalizacja Tesseract (leniwa - dopiero przy pierwszym użyciu)
+        // v7.2: dodany mutex (tesseractInitializing) i warm-up recognize
+        async function initTesseract() {
+            if (tesseractReady && tesseractWorker) return tesseractWorker;
+            
+            // Mutex - zapobiegaj równoległej inicjalizacji
+            if (tesseractInitializing) {
+                // Czekaj na zakończenie trwającej inicjalizacji
+                while (tesseractInitializing) {
+                    await new Promise(r => setTimeout(r, 200));
+                }
+                if (tesseractReady && tesseractWorker) return tesseractWorker;
+            }
+            
+            tesseractInitializing = true;
+            const progressText = document.getElementById('ocrProgressText');
+            if (progressText) progressText.textContent = 'Ładuję silnik OCR (pierwszy raz ~3 MB)...';
+            
+            try {
+                tesseractWorker = await Tesseract.createWorker('pol', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const pct = Math.round((m.progress || 0) * 100);
+                            const fill = document.getElementById('ocrProgressFill');
+                            if (fill) fill.style.width = pct + '%';
+                            if (progressText) progressText.textContent = 'Rozpoznaję tekst... ' + pct + '%';
+                        } else if (m.status) {
+                            if (progressText) progressText.textContent = m.status + '...';
+                        }
+                    }
+                });
+                
+                // WARM-UP: rozpoznaj mały pusty obraz żeby silnik był w pełni gotowy
+                // To rozwiązuje problem "pierwszy skan pusty"
+                try {
+                    const warmupCanvas = document.createElement('canvas');
+                    warmupCanvas.width = 100;
+                    warmupCanvas.height = 30;
+                    const wCtx = warmupCanvas.getContext('2d');
+                    wCtx.fillStyle = '#ffffff';
+                    wCtx.fillRect(0, 0, 100, 30);
+                    wCtx.fillStyle = '#000000';
+                    wCtx.font = '16px Arial';
+                    wCtx.fillText('TEST', 10, 22);
+                    await tesseractWorker.recognize(warmupCanvas);
+                    console.log('Tesseract warm-up done');
+                } catch (warmupErr) {
+                    console.log('Tesseract warm-up error (ignorowane):', warmupErr.message);
+                }
+                
+                tesseractReady = true;
+                console.log('Tesseract.js załadowany i gotowy (język: pol)');
+                return tesseractWorker;
+            } catch (err) {
+                console.error('Błąd ładowania Tesseract:', err);
+                throw err;
+            } finally {
+                tesseractInitializing = false;
+            }
+        }
+        
+        // Obsługa pliku ze screenshotem carq.pl
+        async function handleOCRFile(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            console.log('OCR: plik', file.name, file.size, 'B, typ:', file.type);
+            
+            // Pokaż postęp
+            document.getElementById('ocrProgress').style.display = 'block';
+            document.getElementById('ocrPreview').style.display = 'none';
+            document.getElementById('qrResult').style.display = 'none';
+            document.getElementById('qrError').style.display = 'none';
+            const fill = document.getElementById('ocrProgressFill');
+            if (fill) fill.style.width = '5%';
+            
+            try {
+                // 1. Wczytaj i przetwórz obraz
+                const img = await loadImageFromFile(file);
+                console.log('OCR: obraz wczytany', img.width, 'x', img.height);
+                
+                // Poczekaj aż obraz będzie w pełni załadowany
+                if (!img.complete || img.naturalWidth === 0) {
+                    await new Promise((resolve) => { img.onload = resolve; setTimeout(resolve, 1000); });
+                }
+                
+                const enhanced = enhanceForOCR(img);
+                console.log('OCR: enhanced canvas', enhanced.width, 'x', enhanced.height);
+                
+                if (fill) fill.style.width = '15%';
+                
+                // 2. Inicjalizuj Tesseract (lub użyj istniejącego)
+                const worker = await initTesseract();
+                
+                if (fill) fill.style.width = '25%';
+                
+                // 3. Rozpoznaj tekst (z retry jeśli pierwszy wynik pusty)
+                // v7.2: konwertuj canvas na blob, potem na ImageData - pewniejsze niż surowy canvas
+                let rawText = '';
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    let ocrInput = enhanced;
+                    
+                    // Przy retry - spróbuj innego formatu wejściowego
+                    if (attempt === 2) {
+                        // Konwersja canvas na data URL (base64) - czasem Tesseract lepiej to przetwarza
+                        try {
+                            ocrInput = enhanced.toDataURL('image/png');
+                            console.log('OCR: retry z data URL');
+                        } catch (e) {
+                            console.log('OCR: data URL failed, używam canvas');
+                        }
+                    }
+                    if (attempt === 3) {
+                        // Ostatnia szansa - przeładuj obraz ze źródła i przetwórz ponownie
+                        try {
+                            const reImg = await loadImageFromFile(file);
+                            await new Promise(r => setTimeout(r, 300));
+                            ocrInput = enhanceForOCR(reImg);
+                            console.log('OCR: retry z nowym przetworzeniem obrazu');
+                        } catch (e) {
+                            console.log('OCR: reprocess failed');
+                        }
+                    }
+                    
+                    const { data } = await worker.recognize(ocrInput);
+                    rawText = data.text || '';
+                    console.log('OCR próba ' + attempt + '/' + 3 + ': ' + rawText.length + ' znaków');
+                    if (rawText.length > 20) break; // Sukces - mamy tekst
+                    
+                    if (rawText.length < 20) {
+                        console.log('OCR: za mało tekstu, ponawiam...');
+                        const progressText2 = document.getElementById('ocrProgressText');
+                        if (progressText2) progressText2.textContent = 'Ponawiam skanowanie (próba ' + (attempt+1) + ')...';
+                        await new Promise(r => setTimeout(r, 800));
+                    }
+                }
+                
+                console.log('OCR surowy wynik (' + rawText.length + ' znaków):', rawText.substring(0, 300));
+                
+                // 4. Pokaż surowy tekst
+                document.getElementById('ocrRawText').textContent = rawText;
+                document.getElementById('ocrPreview').style.display = 'block';
+                
+                // 5. Parsuj dane z carq.pl
+                const vehicleData = parseCarqOCR(rawText);
+                
+                if (vehicleData && Object.keys(vehicleData).length >= 2) {
+                    // Sukces!
+                    vehicleData._format = 'OCR carq.pl';
+                    showQRDataPreview(vehicleData, 'OCR carq.pl');
+                    console.log('OCR: znaleziono dane pojazdu:', vehicleData);
+                } else {
+                    showQRError(`
+                        <strong>⚠️ Nie udało się odczytać danych z tego screenshota.</strong><br><br>
+                        Tekst OCR został rozpoznany (${rawText.length} znaków), ale nie znaleziono 
+                        typowych pól pojazdu (marka, VIN, rejestracja).<br><br>
+                        <strong>Wskazówki:</strong><br>
+                        • Upewnij się, że na screenshocie widać wyniki z carq.pl<br>
+                        • Screenshot powinien zawierać dane pojazdu (marka, VIN, rejestracja)<br>
+                        • Spróbuj zrobić screenshot z bliższej odległości
+                    `);
+                }
+                
+            } catch (err) {
+                console.error('OCR błąd:', err);
+                showQRError(`
+                    <strong>❌ Błąd OCR:</strong> ${err.message}<br><br>
+                    Spróbuj ponownie lub użyj innej zakładki.
+                `);
+            } finally {
+                document.getElementById('ocrProgress').style.display = 'none';
+                // Reset inputa
+                setTimeout(() => { input.value = ''; }, 500);
+            }
+        }
+        
+        // Wczytaj obraz z pliku do Image elementu
+        function loadImageFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error('Nie można wczytać obrazu'));
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Nie można odczytać pliku'));
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        // Przetwórz obraz dla lepszego OCR (kontrast, rozmiar, skala szarości)
+        function enhanceForOCR(img) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Skaluj do min 1500px szerokości dla lepszego OCR
+            let w = img.width;
+            let h = img.height;
+            const minWidth = 1500;
+            if (w < minWidth) {
+                const scale = minWidth / w;
+                w = minWidth;
+                h = Math.round(img.height * scale);
+            }
+            // Ale nie za duży (max 3000px)
+            if (w > 3000) {
+                const scale = 3000 / w;
+                w = 3000;
+                h = Math.round(h * scale);
+            }
+            
+            canvas.width = w;
+            canvas.height = h;
+            
+            // Rysuj obraz
+            ctx.drawImage(img, 0, 0, w, h);
+            
+            // Zwiększ kontrast i jasność
+            const imageData = ctx.getImageData(0, 0, w, h);
+            const data = imageData.data;
+            const contrast = 1.6;  // Lekki kontrast
+            const brightness = 10; // Trochę jaśniej
+            
+            for (let i = 0; i < data.length; i += 4) {
+                // Konwertuj na szarość
+                const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                // Kontrast + jasność
+                let val = ((gray - 128) * contrast) + 128 + brightness;
+                val = Math.max(0, Math.min(255, val));
+                data[i] = data[i+1] = data[i+2] = val;
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            return canvas;
+        }
+        
+        // === PARSER DANYCH Z CARQ.PL (OCR) v7.2 ===
+        // Odporny na błędy OCR parser - szuka wartości po etykietach + wzorcach
+        // v7.2: naprawione rozróżnianie serii dowodu od tablicy rejestracyjnej
+        function parseCarqOCR(rawText) {
+            console.log('=== PARSER OCR carq.pl v7.2 ===');
+            
+            const result = {};
+            const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            console.log('Linie tekstu:', lines.length);
+            
+            // STRATEGIA 1: Szukaj etykiet (nawet zniekształconych przez OCR) i bierz wartość z następnej linii
+            // OCR zniekształca polskie znaki, więc używamy liberalnych regexów
+            const labelPatterns = [
+                // WAŻNE: Seria dowodu musi być PRZED rejestracją, bo carq.pl wyświetla serię PRZED numerem rejestracyjnym
+                // OCR: "Seria dowodu rejestracyjnego" lub "Serin dowodu rejestencyjsnzyo"
+                [/seri[an].*dow|ser[a-z]*\s+dow.*rej/i, '_seriaDowodu'],
+                // Rejestracja - TYLKO "Numer rejestracyjny" (nie "seria dowodu rejestracyjnego")
+                // OCR czyta np. "Numer rejestracyjny" lub "Numec rejestracyny"
+                // UWAGA: NIE matchuj linii zawierających "dowodu" (to seria dowodu!)
+                [/^n[ua]m[ea][rcks].*rej[ei]s|^nr\s+rej/i, 'registration'],
+                // Marka - OCR: "Marka pojazdu" lub "Morka pojazdz"
+                [/^m[ao]rk[ae]\s*po/i, 'brand'],
+                // Model - OCR: "Medeś pojaniu", "Mode! pojazcu", "Modeś pojaniu"
+                [/^m[oe]d[eo!][lł!sś][eśi]?\s*po|^model/i, 'model'],
+                // VIN - OCR: "Numer VN rodnoso" lub "Hume VIN noca"
+                [/vin|^num.*v[ni]n|^hum.*vin/i, 'vin'],
+                // Pojemność - OCR: "Poperność:" lub "Pojemność"
+                [/^po[jp]emno[sś][cć]|^poperność/i, '_pojemnosc'],
+                // Moc silnika - OCR: "Moc sinka" lub "Mc simka"
+                [/^m[oc][ck]\s*si[lłn]|^mc\s*si/i, '_moc'],
+                // Rodzaj paliwa - OCR: "Rodzaj patmo" lub "Rodzej potem"
+                [/^rodz[ea]j\s*p[ao][lt]/i, '_paliwo'],
+                // Data pierwszej rejestracji
+                [/^d[ao]t[ao]\s*pierw|pierwsz.*rej/i, 'firstRegistration'],
+                // Rok produkcji  
+                [/^rok\s*prod|^ro[kś]\s*prod/i, '_rokProdukcji'],
+                // Masa własna
+                [/^masa\s*w[lł]a[sś]|^mas.*w[ao][sś]z/i, '_masaWlasna'],
+                // Masa dopuszczalna
+                [/^maks.*masa|^dopuszcz|^d[oe]p[orzs]+cz/i, '_masaDop'],
+                // Rodzaj pojazdu
+                [/^rodz[ea]j\s*poj/i, '_rodzajPojazdu'],
+                // Miejsca siedzące
+                [/^miejsc.*siedz/i, '_miejscaSiedzace'],
+            ];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                for (const [pattern, key] of labelPatterns) {
+                    if (pattern.test(line)) {
+                        // BEZPIECZNIK: jeśli linia matchuje rejestrację ALE zawiera "dowod"/"seria",
+                        // to to jest seria dowodu, nie rejestracja
+                        if (key === 'registration' && /dow[oó]d|seri[an]/i.test(line)) {
+                            // To jest "Seria dowodu rejestracyjnego" - zapisz jako _seriaDowodu
+                            const value = (i + 1 < lines.length) ? lines[i + 1].trim() : '';
+                            if (value && !result._seriaDowodu) {
+                                result._seriaDowodu = value;
+                                console.log('OCR: seria dowodu (bezpiecznik):', value, '(linia', i, ')');
+                            }
+                            break;
+                        }
+                        
+                        // Wartość w następnej linii
+                        const value = (i + 1 < lines.length) ? lines[i + 1].trim() : '';
+                        
+                        if (value && value.length > 0 && !isLikelyLabel(value)) {
+                            if (!result[key]) {
+                                result[key] = value;
+                                console.log('OCR label match:', key, '=', value, '(linia', i, '→', i+1, ')');
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // STRATEGIA 2: VIN po wzorcu (17 znaków alfa-numerycznych)
+            // OCR zamienia 0→O, 1→I itp., więc szukamy też z tolerancją
+            if (!result.vin) {
+                // Szukaj ciągu 17 dużych liter/cyfr
+                const vinMatch = rawText.match(/\b([A-Z0-9]{17})\b/);
+                if (vinMatch) {
+                    result.vin = vinMatch[1];
+                    console.log('OCR: VIN (luźny wzorzec):', result.vin);
+                }
+            }
+            
+            // STRATEGIA 3: Numer rejestracyjny - polskie formaty
+            // PL: 2-3 litery (powiat) + spacja + 4-5 alfanumerycznych, np. "DJ 8014A", "DLW HF31"
+            if (!result.registration) {
+                // Szukaj wzorca po etykiecie "rejestr" w pobliżu
+                const regPatterns = [
+                    /\b([A-Z]{2,3}\s+[A-Z0-9]{4,5}[A-ZĄ]?)\b/g, // DJ 8014A, DLW HF31
+                    /\b([A-Z]{2,3}[A-Z0-9]{4,5}[A-ZĄ]?)\b/g,     // DJ8014A (bez spacji)
+                ];
+                
+                for (const pat of regPatterns) {
+                    const matches = [...rawText.matchAll(pat)];
+                    for (const m of matches) {
+                        const candidate = m[1].replace(/\s+/g, ' ');
+                        // Odfiltruj fałszywe dopasowania: VIN, nazwy miast, itp.
+                        // Polska rejestracja MUSI zawierać co najmniej jedną cyfrę
+                        const hasDigit = /\d/.test(candidate);
+                        // Lista fałszywych pozytywów (marki, nazwy miast, etc.)
+                        const falsePositives = ['STAROSTA','STATION','WAGON','OPEL','ASTRA',
+                            'SZPITALN','CITROEN','PICASSO','TOYOTA','PEUGEOT','RENAULT',
+                            'VOLKSWAGEN','MERCEDES','SKODA','FIAT','HONDA','NISSAN',
+                            'HYUNDAI','MAZDA','SUZUKI','MITSUBISHI','SUBARU','DACIA',
+                            'LWÓWEK','ŚLĄSKI','POJAZDU','SILNIKA','PALIWA'];
+                        const isFalsePositive = falsePositives.some(fp => candidate.includes(fp));
+                        if (candidate.length >= 6 && candidate.length <= 10 &&
+                            hasDigit && !isFalsePositive &&
+                            !/^BAV\d/.test(candidate) && // seria dowodu BAV*, nie rejestracja
+                            !/^[A-Z]{3}\d{7}$/.test(candidate) && // ogólnie: 3 litery + 7 cyfr = seria dowodu
+                            !/^UL\./.test(candidate) &&
+                            // Sprawdź czy to nie jest wartość serii dowodu którą już znamy
+                            candidate !== result._seriaDowodu) {
+                            result.registration = candidate;
+                            console.log('OCR: rejestracja wzorcem:', result.registration);
+                            break;
+                        }
+                    }
+                    if (result.registration) break;
+                }
+            }
+            
+            // STRATEGIA 4: Daty YYYY-MM-DD
+            if (!result.firstRegistration) {
+                const dateMatches = rawText.match(/\b(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/g);
+                if (dateMatches && dateMatches.length > 0) {
+                    // Ostatnia data jest zwykle datą pierwszej rejestracji
+                    result.firstRegistration = dateMatches[dateMatches.length - 1];
+                    console.log('OCR: data rejestracji:', result.firstRegistration);
+                }
+            }
+            
+            // STRATEGIA 5: Marka i model z nagłówka carq.pl
+            // carq.pl wyświetla "OPEL ASTRA STATION WAGON" jako duży nagłówek na górze
+            if (!result.brand || !result.model) {
+                for (let i = 0; i < Math.min(lines.length, 12); i++) {
+                    const line = lines[i];
+                    // Szukaj linii z samymi dużymi literami i spacjami (min 2 słowa)
+                    // Ale NIE: STAROSTA, dane, organ, ul.
+                    if (/^[A-ZŻŹĆĄŚĘŁÓŃ\s-]{5,}$/.test(line) && line.includes(' ')) {
+                        const upper = line.toUpperCase();
+                        // Wyklucz fałszywe dopasowania
+                        if (upper.includes('STAROSTA') || upper.includes('DANE') || 
+                            upper.includes('ORGAN') || upper.includes('PODSTAW') ||
+                            upper.includes('OCZEK') || upper.includes('SZPITAL')) continue;
+                        
+                        const words = line.split(/\s+/).filter(w => w.length > 0);
+                        if (words.length >= 2) {
+                            if (!result.brand) result.brand = words[0];
+                            if (!result.model) result.model = words.slice(1).join(' ');
+                            console.log('OCR: marka/model z nagłówka:', result.brand, result.model);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // POST-PROCESSING: napraw typowe błędy OCR
+            
+            // WALIDACJA REJESTRACJI: jeśli wygląda jak seria dowodu (3 litery + 7 cyfr), odrzuć
+            if (result.registration) {
+                const reg = result.registration.replace(/\s/g, '');
+                if (/^[A-Z]{3}\d{7,}$/.test(reg)) {
+                    console.log('OCR: odrzucam fałszywą rejestrację (wygląda na serię dowodu):', result.registration);
+                    if (!result._seriaDowodu) result._seriaDowodu = result.registration;
+                    delete result.registration;
+                }
+            }
+            
+            // Pojemność: "191000" → "1910" (OCR czyta "1910,00" lub "1 910,00" jako "191000")
+            if (result._pojemnosc) {
+                let poj = result._pojemnosc.replace(/[^\d.,]/g, '');
+                if (poj.length > 4 && parseInt(poj) > 10000) {
+                    poj = poj.substring(0, poj.length - 2);
+                }
+                if (poj.includes(',')) poj = poj.split(',')[0];
+                result.engineCapacity = poj + ' cm³';
+            }
+            
+            // Moc: "88,00" → "88"
+            if (result._moc) {
+                let moc = result._moc.replace(/[^\d.,]/g, '');
+                if (moc.includes(',')) moc = moc.split(',')[0];
+                result.power = moc;
+            }
+            
+            // Paliwo: normalizuj (OCR: "D"/"d"/"b"(błąd OCR za D), "P", "patmo", "potem")
+            if (result._paliwo) {
+                const raw = result._paliwo.trim();
+                const p = raw.toUpperCase();
+                // OCR często czyta "D" jako "b" lub "d" (jednoliterowe)
+                if (p === 'D' || p === 'B' || p.includes('DIESEL') || p.includes('ON') || p === 'OLEJ') {
+                    result.fuel = 'D'; result.fuelDisplay = 'Olej napędowy (Diesel)';
+                } else if (p === 'P' || p.includes('BENZYN') || p.includes('PB')) {
+                    result.fuel = 'P'; result.fuelDisplay = 'Benzyna';
+                } else if (p.includes('LPG')) {
+                    result.fuel = 'P LPG'; result.fuelDisplay = 'Benzyna + LPG';
+                } else if (p === 'E' || p.includes('ELEKT')) {
+                    result.fuel = 'E'; result.fuelDisplay = 'Elektryczny';
+                } else if (raw.length === 1) {
+                    // Pojedyncza litera - prawdopodobnie błąd OCR, zachowaj jako wielką
+                    result.fuel = p; result.fuelDisplay = p;
+                } else {
+                    result.fuel = result._paliwo; result.fuelDisplay = result._paliwo;
+                }
+            }
+            
+            // Rok produkcji
+            if (result._rokProdukcji) {
+                const yearMatch = result._rokProdukcji.match(/\b(19|20)\d{2}\b/);
+                if (yearMatch) result.year = parseInt(yearMatch[0]);
+            }
+            if (!result.year && result.firstRegistration) {
+                const yearMatch = result.firstRegistration.match(/\b(19|20)\d{2}\b/);
+                if (yearMatch) result.year = parseInt(yearMatch[0]);
+            }
+            
+            // Masa
+            if (result._masaWlasna) result.weight = result._masaWlasna.replace(/[^\d]/g, '');
+            if (result._masaDop) result.maxMass = result._masaDop.replace(/[^\d]/g, '');
+            
+            // Czyszczenie: wywal klucze tymczasowe
+            for (const key of Object.keys(result)) {
+                if (key.startsWith('_')) delete result[key];
+            }
+            
+            console.log('OCR wynik parsera:', JSON.stringify(result, null, 2));
+            return result;
+        }
+        
+        // Sprawdź czy linia wygląda jak etykieta (a nie wartość)
+        function isLikelyLabel(text) {
+            const labelWords = [
+                /^m[ao]rk[ae]/i, /^m[oe]d[eo]/i, /^n[ua]m/i, /^d[ao]t[ao]/i, /^rodz/i, 
+                /^po[jp]emn/i, /^m[oc][ck]/i, /^masa/i, /^organ/i, /^seria/i,
+                /^miejsc/i, /^liczba/i, /^maksym/i, /^d[eo]p[orzs]/i,
+                /^podstaw/i, /^dane\s/i, /^oczekiw/i, /^najw/i
+            ];
+            return labelWords.some(p => p.test(text));
+        }
+
+        // === KONIEC AZTEC/QR SCANNER v7 ===
     </script>
 </body>
 </html>
