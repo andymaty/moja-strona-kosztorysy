@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Program Warsztatowy v8</title>
+    <title>Program Warsztatowy v14</title>
     
     <!-- FontAwesome dla ikon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -249,6 +249,13 @@
             border-radius: 4px;
         }
         
+        /* Kompaktowe dane pojazdu na wydruku */
+        .veh-print-details p {
+            margin: 1px 0;
+            font-size: 13px;
+            color: #222;
+        }
+        
         .client-info h3, .vehicle-info h3 {
             margin: 0 0 10px 0;
             font-size: 16px;
@@ -328,13 +335,16 @@
             /* Zmniejsz pionowe odstępy, by więcej mieściło się na 1 stronie */
             .document-header { margin-bottom: 8px !important; padding-bottom: 8px !important; }
             .document-title { margin: 8px 0 !important; font-size: 20px !important; }
-            .document-details { margin-bottom: 8px !important; gap: 8px !important; }
+            .document-details { margin-bottom: 6px !important; gap: 6px !important; }
             .company-info h2 { margin: 0 0 6px 0 !important; font-size: 18px !important; font-weight: 700 !important; }
             .company-info p { margin: 2px 0 !important; font-size: 13px !important; font-weight: 700 !important; }
             .logo-section img { width: 150px !important; height: 100px !important; }
             .document-footer { font-size: 14px !important; font-weight: 700 !important; }
-            .client-info h3, .vehicle-info h3 { font-size: 14px !important; font-weight: 800 !important; }
-            .client-info p, .vehicle-info p { font-size: 14px !important; font-weight: 700 !important; }
+            .client-info h3, .vehicle-info h3 { font-size: 12px !important; font-weight: 800 !important; margin-bottom: 3px !important; }
+            .client-info p, .vehicle-info p { font-size: 11px !important; font-weight: normal !important; margin: 1px 0 !important; }
+            .client-info, .vehicle-info { padding: 6px 10px !important; }
+            /* Kompaktowe dane pojazdu */
+            .veh-print-details p { margin: 0 !important; font-size: 10px !important; font-weight: normal !important; line-height: 1.3 !important; }
             .modal { display: none !important; }
 
             /* Tryb bardzo zwarty (sterowany klasą print-compact) */
@@ -347,6 +357,9 @@
             .print-area.print-compact .positions-table td { padding: 3px 4px !important; }
             .print-area.print-compact .logo-section img { width: 120px !important; height: 80px !important; }
             .print-area.print-compact .document-footer { font-size: 10px !important; }
+            .print-area.print-compact .veh-print-details p { font-size: 10px !important; }
+            .print-area.print-compact .client-info, .print-area.print-compact .vehicle-info { padding: 6px 8px !important; }
+            .print-area.print-compact .client-info p, .print-area.print-compact .vehicle-info p { font-size: 11px !important; margin: 0 !important; }
 
             /* Ukryj wszystkie bezpośrednie elementy body poza obszarem wydruku,
                aby uniknąć pustych dodatkowych stron w niektórych przeglądarkach */
@@ -870,11 +883,7 @@
                             <input type="checkbox" id="autoFitPrint"> Auto dopasuj do jednej strony (skaluj)
                         </label>
                     </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="showPLN" checked> Pokaż „PLN” przy kwotach (odznacz, aby drukować tylko „zł”)
-                        </label>
-                    </div>
+
                     <div class="form-group">
                         <label>
                             <input type="checkbox" id="updatePriceFromDocument"> Aktualizuj cenę w słowniku wg ostatniego dokumentu
@@ -1128,6 +1137,10 @@
                 <div id="vehicleOwnerSuggestions" class="suggestions"></div>
             </div>
             <div class="form-group">
+                <label>Adres właściciela:</label>
+                <input type="text" id="vehicleOwnerAddress" placeholder="np. 59-623 Golejów, Golejów 50">
+            </div>
+            <div class="form-group">
                 <label>Przebieg początkowy (km):</label>
                 <input type="number" id="vehicleMileage" min="0">
             </div>
@@ -1162,6 +1175,9 @@
                 </button>
                 <button id="tabOcr" class="btn" onclick="switchScannerTab('ocr')" style="flex:1; min-width: 120px; background: #17a2b8; font-size: 15px; padding: 12px 8px; color: white;">
                     <i class="fas fa-mobile-alt"></i> Screen carq.pl
+                </button>
+                <button id="tabImport" class="btn" onclick="switchScannerTab('import')" style="flex:1; min-width: 120px; background: #28a745; font-size: 15px; padding: 12px 8px; color: white;">
+                    <i class="fas fa-paste"></i> Import z dowodu
                 </button>
             </div>
 
@@ -1278,6 +1294,39 @@
                     <h4>📋 Rozpoznany tekst (surowy):</h4>
                     <pre id="ocrRawText" style="background: #f8f9fa; border: 1px solid #ddd; padding: 10px; border-radius: 6px; 
                          max-height: 200px; overflow-y: auto; font-size: 12px; white-space: pre-wrap;"></pre>
+                </div>
+            </div>
+
+            <!-- Tab: Import danych z aplikacji Android "Dowody Rejestracyjne Polskie" -->
+            <div id="scannerTabImport" style="display: none;">
+                <div style="background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                    <strong>📋 Import z aplikacji "Dowody Rejestracyjne Polskie":</strong><br>
+                    1. Na starym telefonie z Androidem otwórz aplikację <strong>Dowody Rejestracyjne</strong><br>
+                    2. Zeskanuj kod Aztec z dowodu rejestracyjnego<br>
+                    3. Kliknij <strong>"Kopiuj do schowka"</strong> w aplikacji<br>
+                    4. Wklej dane poniżej (Ctrl+V lub długie przytrzymanie)
+                </div>
+                
+                <div style="padding: 10px;">
+                    <h4 style="margin: 0 0 10px;"><i class="fas fa-paste"></i> Wklej skopiowane dane:</h4>
+                    <textarea id="drImportTextarea" rows="10" style="width: 100%; font-family: monospace; font-size: 13px; 
+                             border: 2px solid #28a745; border-radius: 8px; padding: 10px; resize: vertical;"
+                             placeholder="Wklej tutaj dane skopiowane z aplikacji Android...
+
+Przykład:
+- Nr rejestracyjny: DLW VK98
+- Marka pojazdu: CITROEN
+- Model pojazdu: C4 PICASSO
+- VIN: VF7UARHJH45348611
+..."></textarea>
+                    <div style="margin-top: 10px; display: flex; gap: 8px;">
+                        <button class="btn" onclick="parseDRImportData()" style="background: #28a745; color: white; flex: 1; font-size: 16px; padding: 12px;">
+                            <i class="fas fa-check"></i> Importuj dane
+                        </button>
+                        <button class="btn" onclick="document.getElementById('drImportTextarea').value=''" style="background: #6c757d; color: white; padding: 12px;">
+                            <i class="fas fa-eraser"></i> Wyczyść
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1437,7 +1486,7 @@
             </div>
             
             <div style="text-align: right; font-weight: bold; font-size: 18px; margin: 12px 0;">
-                Suma: <span id="documentTotal">0,00 zł PLN</span>
+                Suma: <span id="documentTotal">0,00 zł</span>
             </div>
             
             <button class="btn" onclick="saveDocument()">Zapisz</button>
@@ -1764,8 +1813,6 @@
                 if (pnl) pnl.addEventListener('change', saveCompanySettings);
                 const af = document.getElementById('autoFitPrint');
                 if (af) af.addEventListener('change', saveCompanySettings);
-                const spln = document.getElementById('showPLN');
-                if (spln) spln.addEventListener('change', saveCompanySettings);
                 const saveBtn = document.getElementById('saveSettingsBtn');
                 if (saveBtn) saveBtn.addEventListener('click', function(){ saveCompanySettings(); rebuildIssuerDatalist(); applyLogoPreviewStyle(); alert('Zapisano ustawienia'); });
             } catch (e) { console.error('Błąd inicjalizacji przycisków:', e); }
@@ -1831,8 +1878,6 @@
                 if (pnl) pnl.addEventListener('change', saveCompanySettings);
                 const af = document.getElementById('autoFitPrint');
                 if (af) af.addEventListener('change', saveCompanySettings);
-                const spln = document.getElementById('showPLN');
-                if (spln) spln.addEventListener('change', saveCompanySettings);
                 const saveBtn = document.getElementById('saveSettingsBtn');
                 if (saveBtn) saveBtn.addEventListener('click', function(){ saveCompanySettings(); rebuildIssuerDatalist(); applyLogoPreviewStyle(); alert('Zapisano ustawienia'); });
             } catch (e) { /* ignoruj */ }
@@ -2022,6 +2067,7 @@
             document.getElementById('vehicleFuel').value = '';
             document.getElementById('vehicleWeight').value = '';
             document.getElementById('vehicleOwner').value = '';
+            document.getElementById('vehicleOwnerAddress').value = '';
             document.getElementById('vehicleMileage').value = '';
             document.getElementById('vehicleModal').style.display = 'block';
         }
@@ -2041,6 +2087,7 @@
             document.getElementById('vehicleFuel').value = vehicle.fuel || '';
             document.getElementById('vehicleWeight').value = vehicle.weight || '';
             document.getElementById('vehicleOwner').value = vehicle.owner;
+            document.getElementById('vehicleOwnerAddress').value = vehicle.ownerAddress || '';
             document.getElementById('vehicleMileage').value = vehicle.mileage || '';
             document.getElementById('vehicleModal').style.display = 'block';
         }
@@ -2057,6 +2104,7 @@
             const fuel = document.getElementById('vehicleFuel').value;
             const weight = document.getElementById('vehicleWeight').value.trim();
             const owner = document.getElementById('vehicleOwner').value.trim();
+            const ownerAddress = document.getElementById('vehicleOwnerAddress').value.trim();
             const mileage = document.getElementById('vehicleMileage').value;
             
             if (!registration || !brand || !model) {
@@ -2076,6 +2124,7 @@
                 fuel: fuel || null,
                 weight: weight || null,
                 owner: owner,
+                ownerAddress: ownerAddress || null,
                 mileage: mileage ? parseInt(mileage) : null,
                 mileageHistory: []
             };
@@ -2750,31 +2799,42 @@
                 
                 if (matchedVehicle) {
                     var vd = matchedVehicle;
-                    vehicleDetailsHtml = '<p><strong>Pojazd:</strong> ' + escapeHtml(vd.brand + ' ' + vd.model) + '</p>';
-                    vehicleDetailsHtml += '<p><strong>Nr rejestracyjny:</strong> ' + escapeHtml(vd.registration) + '</p>';
-                    if (vd.vin) vehicleDetailsHtml += '<p><strong>VIN:</strong> ' + escapeHtml(vd.vin) + '</p>';
-                    if (vd.year) vehicleDetailsHtml += '<p><strong>Rok produkcji:</strong> ' + vd.year + '</p>';
+                    // Kompaktowy layout danych pojazdu na wydruku
+                    vehicleDetailsHtml = '<div class="veh-print-details">';
+                    vehicleDetailsHtml += '<p>Pojazd: ' + escapeHtml(vd.brand + ' ' + vd.model) + ', ' + escapeHtml(vd.registration) + '</p>';
+                    if (vd.vin) vehicleDetailsHtml += '<p>VIN: ' + escapeHtml(vd.vin) + '</p>';
+                    // Dane techniczne w jednej linii
+                    var techParts = [];
+                    if (vd.year) techParts.push('Rok: ' + vd.year);
                     if (vd.capacity) {
                         var capStr = String(vd.capacity);
-                        vehicleDetailsHtml += '<p><strong>Pojemność:</strong> ' + escapeHtml(capStr) + (capStr.includes('cm') ? '' : ' cm³') + '</p>';
+                        techParts.push('Poj: ' + escapeHtml(capStr) + (capStr.includes('cm') ? '' : ' cm³'));
                     }
                     if (vd.power) {
                         var pwrStr = String(vd.power);
-                        vehicleDetailsHtml += '<p><strong>Moc:</strong> ' + escapeHtml(pwrStr) + (pwrStr.includes('kW') ? '' : ' kW') + '</p>';
+                        techParts.push('Moc: ' + escapeHtml(pwrStr) + (pwrStr.includes('kW') ? '' : ' kW'));
                     }
-                    if (vd.fuel) vehicleDetailsHtml += '<p><strong>Paliwo:</strong> ' + escapeHtml(vd.fuel) + '</p>';
+                    if (vd.fuel) techParts.push(escapeHtml(vd.fuel));
+                    if (techParts.length > 0) vehicleDetailsHtml += '<p>' + techParts.join(' &middot; ') + '</p>';
+                    // Właściciel i adres w jednej linii
+                    if (vd.owner) {
+                        var ownerLine = '<strong>Właściciel:</strong> ' + escapeHtml(vd.owner);
+                        if (vd.ownerAddress) ownerLine += ', ' + escapeHtml(vd.ownerAddress);
+                        vehicleDetailsHtml += '<p>' + ownerLine + '</p>';
+                    }
+                    vehicleDetailsHtml += '</div>';
                 } else {
                     vehicleDetailsHtml = '<p><strong>Pojazd:</strong> ' + escapeHtml(doc.vehicle) + '</p>';
                 }
             }
 
             var paymentsHtml = '';
-            if (doc.type !== 'kosztorys') {
+            {
                 const paid = Number(doc.paidAmount || 0);
                 const due = Math.max(0, Math.round((grossTotal - paid) * 100) / 100);
-                paymentsHtml = '\n                    <div class="document-footer" style="font-size:14px; color:#000;">\n                        <p><strong>Sposób zapłaty:</strong> '+escapeHtml(doc.paymentMethod || '-')+'</p>\n                        <p><strong>Wartość dokumentu:</strong> '+grossTotal.toFixed(2)+cs+'</p>\n                        <p><strong>Wpłacono:</strong> '+paid.toFixed(2)+cs+'</p>\n                        <p><strong>Pozostało do zapłaty:</strong> '+due.toFixed(2)+cs+'</p>\n                    </div>';
+                paymentsHtml = '<div class="document-footer" style="font-size:12px;color:#000;margin-top:8px;border-top:1px solid #999;padding-top:4px;"><p style="margin:1px 0"><strong>Zapłata:</strong> '+escapeHtml(doc.paymentMethod || '-')+' &nbsp;|&nbsp; <strong>Suma:</strong> '+grossTotal.toFixed(2)+cs+' &nbsp;|&nbsp; <strong>Wpłacono:</strong> '+paid.toFixed(2)+cs+' &nbsp;|&nbsp; <strong>Do zapłaty:</strong> '+due.toFixed(2)+cs+'</p></div>';
             }
-            printArea.innerHTML = '\n                <div class="document-header">\n                    <div class="company-info">\n                        <h2>Wystawiający: '+escapeHtml(doc.issuer)+'</h2>\n                        '+(doc.address ? '<p>'+escapeHtml(doc.address)+'</p>' : '')+'\n                        '+(doc.nip ? '<p>NIP: '+escapeHtml(doc.nip)+'</p>' : '')+'\n                        '+(phoneVal ? '<p>Tel: '+escapeHtml(phoneVal)+'</p>' : '')+'\n                        '+(emailVal ? '<p>Email: '+escapeHtml(emailVal)+'</p>' : '')+'\n                    </div>\n                    '+logoHtml+'\n                </div>\n                \n                <div class="document-title">'+doc.type.toUpperCase()+' '+escapeHtml(doc.number)+'</div>\n                \n                <div class="document-details">\n                    <div class="client-info">\n                        <h3>Klient</h3>\n                        <p><strong>Klient:</strong> '+escapeHtml(doc.client)+'</p>\n                        '+vehicleDetailsHtml+'\n                        '+(doc.notes ? '<p><strong>Uwagi:</strong><br>'+escapeHtml(doc.notes).replace(/\n/g,'<br>')+'</p>' : '')+'\n                    </div>\n                    <div class="vehicle-info">\n                        <h3>Informacje</h3>\n                        <p><strong>Data:</strong> '+escapeHtml(doc.date)+'</p>\n                    </div>\n                </div>\n                \n                <table class="positions-table">\n                    <thead>\n                        <tr>\n                            <th>Pozycja</th>\n                            <th>Ilość</th>\n                            <th>Cena</th>\n                            <th>Suma</th>\n                            <th>Priorytet</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        '+positionsRows+'\n                    </tbody>\n                    <tfoot>\n                        '+summaryHtml+'\n                    </tfoot>\n                </table>\n                \n                '+paymentsHtml+'\n                '+(footer ? '<div class="document-footer">'+escapeHtml(footer)+'</div>' : '')+'\n            ';
+            printArea.innerHTML = '\n                <div class="document-header">\n                    <div class="company-info">\n                        <h2>Wystawiający: '+escapeHtml(doc.issuer)+'</h2>\n                        '+(doc.address ? '<p>'+escapeHtml(doc.address)+'</p>' : '')+'\n                        '+(doc.nip ? '<p>NIP: '+escapeHtml(doc.nip)+'</p>' : '')+'\n                        '+(phoneVal ? '<p>Tel: '+escapeHtml(phoneVal)+'</p>' : '')+'\n                        '+(emailVal ? '<p>Email: '+escapeHtml(emailVal)+'</p>' : '')+'\n                    </div>\n                    '+logoHtml+'\n                </div>\n                \n                <div class="document-title">'+doc.type.toUpperCase()+' '+escapeHtml(doc.number)+'<span style="float:right;font-size:14px;font-weight:normal">Data: '+escapeHtml(doc.date)+'</span></div>\n                \n                <div class="document-details">\n                    <div class="client-info">\n                        <h3>Klient</h3>\n                        <p><strong>Klient:</strong> '+escapeHtml(doc.client)+'</p>\n                        '+vehicleDetailsHtml+'\n                    </div>\n                    <div class="vehicle-info">\n                        '+(doc.notes ? '<h3>Uwagi</h3><p style="font-size:10px;margin:2px 0">'+escapeHtml(doc.notes).replace(/\n/g,'<br>')+'</p>' : '')+'\n                    </div>\n                </div>\n                \n                <table class="positions-table">\n                    <thead>\n                        <tr>\n                            <th>Pozycja</th>\n                            <th>Ilość</th>\n                            <th>Cena</th>\n                            <th>Suma</th>\n                            <th>Priorytet</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        '+positionsRows+'\n                    </tbody>\n                    <tfoot>\n                        '+summaryHtml+'\n                    </tfoot>\n                </table>\n                \n                '+paymentsHtml+'\n                '+(footer ? '<div class="document-footer">'+escapeHtml(footer)+'</div>' : '')+'\n            ';
             
             
 
@@ -3203,9 +3263,7 @@
         function round2(n){ return Math.round(Number(n||0)*100)/100; }
         function getCurrencySuffix(){
             try{
-                const el = document.getElementById('showPLN');
-                const val = el ? el.checked : (localStorage.getItem('showPLN')===null ? true : (localStorage.getItem('showPLN')==='true'));
-                return val ? ' zł PLN' : ' zł';
+                return ' zł';
             }catch(e){ return ' zł'; }
         }
 
@@ -3667,6 +3725,29 @@
         }
 
         // Funkcje sugestii
+
+        // Helper: pozycjonuj dropdown sugestii pod inputem (position:fixed)
+        function positionSuggestions(containerId) {
+            var container = document.getElementById(containerId);
+            if (!container) return;
+            // Szukaj inputa: najpierw po konwencji nazewniczej, potem jako poprzedni sibling
+            var inputId = containerId.replace('Suggestions', '');
+            var input = document.getElementById(inputId);
+            if (!input) {
+                // Fallback: szukaj inputa w tym samym form-group (poprzedni sibling)
+                var prev = container.previousElementSibling;
+                while (prev && prev.tagName !== 'INPUT' && prev.tagName !== 'TEXTAREA') {
+                    prev = prev.previousElementSibling;
+                }
+                input = prev;
+            }
+            if (!input) return;
+            var rect = input.getBoundingClientRect();
+            container.style.left = rect.left + 'px';
+            container.style.top = (rect.bottom + 2) + 'px';
+            container.style.width = rect.width + 'px';
+        }
+
         function suggestClients(value, containerId) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
@@ -3701,6 +3782,7 @@
                 };
                 container.appendChild(div);
             });
+            if (matches.length > 0) positionSuggestions(containerId);
         }
 
         function suggestVehicles(value, containerId) {
@@ -3745,6 +3827,7 @@
                 };
                 container.appendChild(div);
             });
+            if (matches.length > 0) positionSuggestions(containerId);
         }
 
         function suggestServices(value) {
@@ -3804,6 +3887,7 @@
                 };
                 container.appendChild(div);
             });
+            if (results.length > 0) positionSuggestions('serviceSuggestions');
         }
         
         // Funkcja do ukrywania wszystkich podpowiedzi
@@ -3944,8 +4028,7 @@
             const pnl = document.getElementById('printNoLogo'); if (pnl) pnl.checked = printNoLogo;
             const af = document.getElementById('autoFitPrint'); if (af) af.checked = !!autoFitPrint;
             const upd = document.getElementById('updatePriceFromDocument'); if (upd) upd.checked = !!updatePriceFromDocument;
-            const spln = (localStorage.getItem('showPLN') === null) ? true : (localStorage.getItem('showPLN') === 'true');
-            const sh = document.getElementById('showPLN'); if (sh) sh.checked = !!spln;
+
             
             if (companyLogo) {
                 const preview = document.getElementById('logoPreview');
@@ -3967,7 +4050,7 @@
             localStorage.setItem('printNoLogo', document.getElementById('printNoLogo') && document.getElementById('printNoLogo').checked ? 'true' : 'false');
             localStorage.setItem('autoFitPrint', document.getElementById('autoFitPrint') && document.getElementById('autoFitPrint').checked ? 'true' : 'false');
             localStorage.setItem('updatePriceFromDocument', document.getElementById('updatePriceFromDocument') && document.getElementById('updatePriceFromDocument').checked ? 'true' : 'false');
-            localStorage.setItem('showPLN', document.getElementById('showPLN') && document.getElementById('showPLN').checked ? 'true' : 'false');
+
             // dopisz wystawiającego do listy
             const cn = document.getElementById('companyName').value.trim();
             if (cn) saveIssuer(cn);
@@ -5315,28 +5398,58 @@ PRZYKŁADY WYODRĘBNIANIA:
                     }
                 }
                 
-                // Wypełnij dane pojazdu - rozszerzone informacje
+                // Wypełnij dane pojazdu - dodaj do bazy jeśli nie istnieje
                 if (vehicleToAdd.brand || vehicleToAdd.registration) {
                     const vehicleField = document.getElementById('documentVehicle');
                     if (vehicleField) {
-                        let vehicleText = '';
-                        if (vehicleToAdd.brand && vehicleToAdd.model) {
-                            vehicleText = vehicleToAdd.brand + ' ' + vehicleToAdd.model;
-                        }
-                        if (vehicleToAdd.year) vehicleText += ' (' + vehicleToAdd.year + ')';
+                        // Szukaj pojazdu w bazie po rejestracji
+                        var existingVehicle = null;
                         if (vehicleToAdd.registration) {
-                            vehicleText += vehicleText ? ', rej: ' + vehicleToAdd.registration : vehicleToAdd.registration;
+                            var regUpper = vehicleToAdd.registration.toUpperCase().trim();
+                            (vehicles || []).forEach(function(v) {
+                                if (v && v.registration && v.registration.toUpperCase().trim() === regUpper) {
+                                    existingVehicle = v;
+                                }
+                            });
                         }
-                        if (vehicleToAdd.engineCapacity) {
-                            vehicleText += ', ' + vehicleToAdd.engineCapacity;
+                        
+                        if (!existingVehicle && (vehicleToAdd.brand || vehicleToAdd.registration)) {
+                            // Dodaj pojazd do bazy automatycznie
+                            var newVehicle = {
+                                registration: (vehicleToAdd.registration || '').toUpperCase().trim(),
+                                brand: (vehicleToAdd.brand || '').toUpperCase().trim(),
+                                model: (vehicleToAdd.model || '').toUpperCase().trim(),
+                                year: vehicleToAdd.year ? parseInt(vehicleToAdd.year) : null,
+                                vin: (vehicleToAdd.vin || '').toUpperCase().trim() || null,
+                                capacity: vehicleToAdd.engineCapacity || null,
+                                power: vehicleToAdd.power || null,
+                                fuel: null,
+                                weight: null,
+                                owner: clientToAdd.name || null,
+                                ownerAddress: clientToAdd.address || null,
+                                engineCode: vehicleToAdd.engineCode || null,
+                                mileageHistory: []
+                            };
+                            if (vehicleToAdd.mileage) {
+                                newVehicle.mileageHistory.push({
+                                    km: parseInt(vehicleToAdd.mileage),
+                                    date: new Date().toISOString().slice(0,10),
+                                    note: 'AI import'
+                                });
+                            }
+                            vehicles.push(newVehicle);
+                            saveData();
+                            renderVehicles();
+                            existingVehicle = newVehicle;
+                            console.log('AI: Dodano pojazd do bazy:', newVehicle.brand, newVehicle.model, newVehicle.registration);
                         }
-                        if (vehicleToAdd.power) {
-                            vehicleText += ', ' + vehicleToAdd.power + ' KM';
+                        
+                        // Ustaw pole w formacie zgodnym z bazą: "MARKA MODEL (REJESTRACJA)"
+                        if (existingVehicle) {
+                            vehicleField.value = existingVehicle.brand + ' ' + existingVehicle.model + ' (' + existingVehicle.registration + ')';
+                        } else {
+                            vehicleField.value = (vehicleToAdd.brand || '') + ' ' + (vehicleToAdd.model || '');
                         }
-                        if (vehicleToAdd.mileage) {
-                            vehicleText += ', przebieg: ' + vehicleToAdd.mileage + ' km';
-                        }
-                        vehicleField.value = vehicleText;
                     }
                 }
                 
@@ -5801,15 +5914,14 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
         const style = document.createElement('style');
         style.textContent = `
             .suggestions {
-                position: absolute;
+                position: fixed;
                 background: white;
                 border: 1px solid #ddd;
                 border-radius: 4px;
                 max-height: 200px;
                 overflow-y: auto;
-                z-index: 1000;
-                width: 100%;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 10000;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             }
             
             .suggestions div:hover {
@@ -5975,12 +6087,13 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
 
         // === PRZEŁĄCZANIE ZAKŁADEK ===
         function switchScannerTab(tab) {
-            const tabs = ['Capture', 'Photo', 'Camera', 'Ocr'];
+            const tabs = ['Capture', 'Photo', 'Camera', 'Ocr', 'Import'];
             const panels = {
                 'capture': document.getElementById('scannerTabCapture'),
                 'photo': document.getElementById('scannerTabPhoto'),
                 'camera': document.getElementById('scannerTabCamera'),
-                'ocr': document.getElementById('scannerTabOcr')
+                'ocr': document.getElementById('scannerTabOcr'),
+                'import': document.getElementById('scannerTabImport')
             };
             
             // Resetuj wszystkie zakładki
@@ -6746,6 +6859,8 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
         }
         
         // NRV2E Decompress - algorytm dekompresji używany w polskich dowodach
+        // v9: Naprawiony na podstawie analizy APK PolishVehicleCertScanner (wkolendo)
+        // Kluczowa poprawka: warunek stopu offset===1 (nie 0xffffffff) + XOR z 1
         function nrv2eDecompress(input, output) {
             const bits = new BitReader(input, 8);
             let outputPos = 0;
@@ -6758,6 +6873,7 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                     let offset = 1;
                     let length = 0;
                     for (;;) {
+                        if (bits.ended) return; // sprawdzenie z APK
                         offset = offset * 2 + bits.readBit();
                         if (bits.readBit() === 1) break;
                         offset = (offset - 1) * 2 + bits.readBit();
@@ -6767,18 +6883,24 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                         length = bits.readBit();
                     } else {
                         offset = (offset - 3) * 0x100 + bits.readByte();
-                        if (offset === 0xffffffff) break;
-                        length = (offset ^ 0xffffffff) & 1;
+                        if (offset === 1) break; // v9 FIX: sygnał końca strumienia (z APK: rawOffset==1)
+                        length = (offset ^ 1) & 1; // v9 FIX: XOR z 1 (nie 0xffffffff) - zgodnie z APK
                         offset >>= 1;
                         lastOffset = ++offset;
                     }
+                    // Odczyt długości z dodatkowymi sprawdzeniami
+                    if (bits.ended) return;
                     if (length) {
                         length = 1 + bits.readBit();
                     } else if (bits.readBit() === 1) {
                         length = 3 + bits.readBit();
                     } else {
                         length++;
-                        do { length = length * 2 + bits.readBit(); } while (bits.readBit() === 0);
+                        do {
+                            if (bits.ended) return;
+                            length = length * 2 + bits.readBit();
+                            if (bits.ended) return;
+                        } while (bits.readBit() === 0);
                         length += 3;
                     }
                     if (offset > 0x500) length++;
@@ -6937,8 +7059,47 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
             if (dr.typ) v.modelVariant = dr.typ;
             if (dr.kategoria) v.category = dr.kategoria;
             
-            // Dane właściciela (opcjonalne, do wyświetlenia)
+            // Dane właściciela (z kodu Aztec - nowy format)
             if (dr.pelneNazwisko) v.owner = dr.pelneNazwisko;
+            if (dr.pelneNazwisko) v.ownerName = dr.pelneNazwisko;
+            // Złóż adres z pól dowodu
+            let ownerAddr = [];
+            if (dr.kodPocztowy) ownerAddr.push(dr.kodPocztowy);
+            if (dr.miejscowosc) ownerAddr.push(dr.miejscowosc);
+            if (dr.ulica) {
+                let street = dr.ulica;
+                if (dr.nrDomu) street += ' ' + dr.nrDomu;
+                if (dr.nrMieszkania) street += '/' + dr.nrMieszkania;
+                ownerAddr.push(street);
+            } else if (dr.nrDomu) {
+                ownerAddr.push(dr.nrDomu);
+            }
+            if (ownerAddr.length > 0) v.ownerAddress = ownerAddr.join(', ');
+            
+            // Dane właściciela pojazdu (jeśli inny niż posiadacz)
+            if (dr.pelneNazwiskoWlasciciel) {
+                v.holderName = dr.pelneNazwiskoWlasciciel;
+                let holderAddr = [];
+                if (dr.kodPocztowyWlasciciel) holderAddr.push(dr.kodPocztowyWlasciciel);
+                if (dr.miejscowoscWlasciciel) holderAddr.push(dr.miejscowoscWlasciciel);
+                if (dr.ulicaWlasciciel) {
+                    let street = dr.ulicaWlasciciel;
+                    if (dr.nrDomuWlasciciel) street += ' ' + dr.nrDomuWlasciciel;
+                    if (dr.nrMieszkaniaWlasciciel) street += '/' + dr.nrMieszkaniaWlasciciel;
+                    holderAddr.push(street);
+                } else if (dr.nrDomuWlasciciel) {
+                    holderAddr.push(dr.nrDomuWlasciciel);
+                }
+                if (holderAddr.length > 0) v.holderAddress = holderAddr.join(', ');
+            }
+            
+            // Miejsca siedzące
+            if (dr.miejscSiedzacych) v.seats = parseInt(dr.miejscSiedzacych);
+            // Seria dowodu
+            if (dr.seriaDr) v.documentSeries = dr.seriaDr;
+            
+            // Źródło danych
+            v._source = 'aztec_nrv2e';
             
             return v;
         }
@@ -7181,6 +7342,14 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
             if (data.fuel) html += '<div class="qr-data-item"><strong>Paliwo (P.3):</strong> ' + (data.fuelDisplay || data.fuel) + '</div>';
             if (data.weight || data.mass) html += '<div class="qr-data-item"><strong>Masa (G):</strong> ' + (data.weight || data.mass) + ' kg</div>';
             if (data.maxMass) html += '<div class="qr-data-item"><strong>Masa max (F.2):</strong> ' + data.maxMass + ' kg</div>';
+            if (data.seats) html += '<div class="qr-data-item"><strong>Miejsca siedzące:</strong> ' + data.seats + '</div>';
+            if (data.documentSeries) html += '<div class="qr-data-item"><strong>Seria dowodu:</strong> ' + data.documentSeries + '</div>';
+            
+            // Dane właściciela/kierowcy
+            if (data.ownerName || data.owner) html += '<div class="qr-data-item" style="border-top: 1px solid #ddd; padding-top: 8px; margin-top: 8px;"><strong>👤 Właściciel:</strong> ' + (data.ownerName || data.owner) + '</div>';
+            if (data.ownerAddress) html += '<div class="qr-data-item"><strong>📍 Adres właściciela:</strong> ' + data.ownerAddress + '</div>';
+            if (data.holderName && data.holderName !== data.ownerName) html += '<div class="qr-data-item"><strong>👤 Posiadacz dowodu:</strong> ' + data.holderName + '</div>';
+            if (data.holderAddress && data.holderAddress !== data.ownerAddress) html += '<div class="qr-data-item"><strong>📍 Adres posiadacza:</strong> ' + data.holderAddress + '</div>';
             
             html += '</div>';
             html += '<div style="margin-top: 15px;">';
@@ -7241,6 +7410,14 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                 document.getElementById('vehicleWeight').value = data.weight;
             }
             
+            // Właściciel - z importu Android lub Aztec
+            if (data.ownerName || data.owner) {
+                document.getElementById('vehicleOwner').value = data.ownerName || data.owner;
+            }
+            if (data.ownerAddress) {
+                document.getElementById('vehicleOwnerAddress').value = data.ownerAddress;
+            }
+            
             closeModal('qrScannerModal');
             document.getElementById('manualVehicleEntry').style.display = 'block';
             alert('✅ Dane pojazdu wypełnione z kodu ' + (data._format || 'Aztec') + '!');
@@ -7293,6 +7470,271 @@ P.3:P LPG`;
             console.log('Test z danymi CITROEN C4 PICASSO:');
             parseQRData(testData, 'Aztec (TEST)');
             console.log('✅ Test parsera zakończony!');
+        }
+
+        // ============================================================
+        // === PARSER IMPORTU Z APLIKACJI ANDROID "Dowody Rejestracyjne Polskie" ===
+        // Format: klucz-wartość, np. "- Nr rejestracyjny: DLW VK98"
+        // Źródło: "Kopiuj do schowka" w aplikacji wkolendo.dowodyrejestracyjne
+        // ============================================================
+        
+        function parseDRImportData() {
+            const textarea = document.getElementById('drImportTextarea');
+            const rawText = (textarea ? textarea.value : '').trim();
+            
+            if (!rawText || rawText.length < 10) {
+                showQRError('Wklej dane skopiowane z aplikacji "Dowody Rejestracyjne" na Androidzie.');
+                return;
+            }
+            
+            console.log('=== PARSER IMPORT DR Android v10 ===');
+            console.log('Tekst wejściowy (' + rawText.length + ' znaków):', rawText.substring(0, 200));
+            
+            const vehicleData = parseAndroidDRText(rawText);
+            
+            if (vehicleData && (vehicleData.registration || vehicleData.vin || vehicleData.brand)) {
+                vehicleData._format = 'Import DR Android';
+                vehicleData._source = 'android_dr';
+                showQRDataPreview(vehicleData, 'Import z dowodu');
+            } else {
+                showQRError('Nie udało się rozpoznać danych pojazdu.<br>Sprawdź czy wklejony tekst pochodzi z aplikacji "Dowody Rejestracyjne".<br><br>Oczekiwany format:<br><code>- Nr rejestracyjny: DLW VK98<br>- Marka pojazdu: CITROEN<br>- VIN: VF7UARHJH45348611</code>');
+            }
+        }
+        
+        // Parser tekstu klucz:wartość z aplikacji Android "Dowody Rejestracyjne Polskie"
+        // UWAGA: To jest OSOBNY parser od CarQ i od Aztec NRV2E - nie mieszać!
+        function parseAndroidDRText(rawText) {
+            const result = {};
+            const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            console.log('Android DR: parsowanie ' + lines.length + ' linii');
+            
+            // Mapa etykiet → klucze w vehicleData
+            // Każda etykieta ma regex (dopasowanie nazwy klucza) i docelowe pole
+            const fieldMappings = [
+                { pattern: /nr\s*rejestracy|numer\s*rejestracy|tabl.*rejestracy/i, key: 'registration' },
+                { pattern: /^marka\s*pojazdu|^marka:/i, key: 'brand' },
+                { pattern: /^model\s*pojazdu|^model:/i, key: 'model' },
+                { pattern: /vin|nr\s*identyfikac|numer\s*identyfikac/i, key: 'vin' },
+                { pattern: /data\s*pierwsz.*rejestrac/i, key: 'firstRegistration' },
+                { pattern: /rok\s*produkc/i, key: '_rokProdukcji' },
+                { pattern: /pojemno[śs][ćc]\s*silnik/i, key: '_pojemnosc' },
+                { pattern: /max\s*moc\s*netto|moc\s*netto\s*silnik|moc\s*silnik/i, key: '_moc' },
+                { pattern: /rodzaj\s*paliw/i, key: '_paliwo' },
+                { pattern: /max\s*masa\s*ca[łl]kowit|dmc/i, key: '_masaDop' },
+                { pattern: /masa\s*w[łl]asna\s*pojazd/i, key: '_masaWlasna' },
+                { pattern: /liczba\s*osi/i, key: '_liczbaOsi' },
+                { pattern: /liczba\s*miejsc\s*siedz|miejsca\s*siedz/i, key: '_miejscaSiedzace' },
+                { pattern: /seria\s*dowodu|seria\s*dr/i, key: '_seriaDowodu' },
+                { pattern: /w[łl]a[śs]ciciel\s*pojazd/i, key: '_wlasciciel' },
+                { pattern: /posiadacz\s*dowodu|u[żz]ytkown/i, key: '_posiadacz' },
+                { pattern: /adres\s*w[łl]a[śs]ciciel/i, key: '_adresWlasciciela' },
+                { pattern: /adres\s*posiadacz|adres\s*u[żz]ytkown/i, key: '_adresPosiadacza' },
+                { pattern: /pesel\s*w[łl]a[śs]ciciel/i, key: '_peselWlasciciela' },
+                { pattern: /pesel\s*posiadacz/i, key: '_peselPosiadacza' },
+                { pattern: /kategoria\s*pojazd/i, key: '_kategoria' },
+                { pattern: /rodzaj\s*pojazd/i, key: '_rodzajPojazdu' },
+                { pattern: /typ\s*pojazd|typ:/i, key: '_typ' },
+                { pattern: /wariant/i, key: '_wariant' },
+                { pattern: /wersja/i, key: '_wersja' },
+                { pattern: /homologac/i, key: '_homologacja' },
+                { pattern: /organ\s*wydaj/i, key: '_organWydajacy' },
+                { pattern: /data\s*wydania/i, key: '_dataWydania' },
+            ];
+            
+            for (const line of lines) {
+                // Format 1: "- Klucz: Wartość" (z myślnikiem)
+                // Format 2: "Klucz: Wartość" (bez myślnika)
+                // Format 3: "Klucz (jednostka): Wartość"
+                let match = line.match(/^[-•*]\s*(.+?):\s*(.+)$/);
+                if (!match) {
+                    match = line.match(/^(.+?):\s+(.+)$/);
+                }
+                
+                if (!match) continue;
+                
+                const label = match[1].trim();
+                let value = match[2].trim();
+                
+                // Szukaj dopasowania w mapie etykiet
+                for (const mapping of fieldMappings) {
+                    if (mapping.pattern.test(label)) {
+                        result[mapping.key] = value;
+                        console.log('Android DR:', mapping.key, '=', value);
+                        break;
+                    }
+                }
+            }
+            
+            // Konwersja na standardowy vehicleData
+            const vehicleData = {};
+            
+            if (result.registration) vehicleData.registration = result.registration.toUpperCase();
+            if (result.brand) vehicleData.brand = result.brand.toUpperCase();
+            if (result.model) vehicleData.model = result.model.toUpperCase();
+            if (result.vin) vehicleData.vin = result.vin.toUpperCase();
+            if (result.firstRegistration) vehicleData.firstRegistration = result.firstRegistration;
+            
+            // Rok produkcji
+            if (result._rokProdukcji) {
+                const yearMatch = result._rokProdukcji.match(/(\d{4})/);
+                if (yearMatch) vehicleData.year = parseInt(yearMatch[1]);
+            }
+            // Rok z daty pierwszej rejestracji (jeśli brak rokProdukcji)
+            if (!vehicleData.year && result.firstRegistration) {
+                const yearMatch = result.firstRegistration.match(/(\d{4})/);
+                if (yearMatch) vehicleData.year = parseInt(yearMatch[1]);
+            }
+            
+            // Pojemność silnika - wyciągnij liczbę
+            if (result._pojemnosc) {
+                const capMatch = result._pojemnosc.match(/([\d,.]+)/);
+                if (capMatch) {
+                    let cap = capMatch[1].replace(',', '.');
+                    // Jeśli jest w formacie "1997.00 cm³", weź int
+                    vehicleData.engineCapacity = Math.round(parseFloat(cap)) + ' cm³';
+                }
+            }
+            
+            // Moc silnika - wyciągnij liczbę kW
+            if (result._moc) {
+                const powMatch = result._moc.match(/([\d,.]+)/);
+                if (powMatch) {
+                    let pow = powMatch[1].replace(',', '.');
+                    vehicleData.power = parseFloat(pow).toString();
+                }
+            }
+            
+            // Paliwo - mapuj na wartość selecta
+            if (result._paliwo) {
+                const fuel = result._paliwo.toLowerCase();
+                vehicleData.fuel = result._paliwo; // surowa wartość
+                if (fuel.includes('olej') || fuel.includes('diesel') || fuel.includes('napęd')) {
+                    vehicleData.fuelDisplay = 'Diesel';
+                } else if (fuel.includes('benzyn')) {
+                    vehicleData.fuelDisplay = 'Benzyna';
+                } else if (fuel.includes('lpg') || fuel.includes('propan')) {
+                    vehicleData.fuelDisplay = 'Benzyna+LPG';
+                } else if (fuel.includes('elektr')) {
+                    vehicleData.fuelDisplay = 'Elektryczny';
+                } else if (fuel.includes('hybry')) {
+                    vehicleData.fuelDisplay = 'Hybryda';
+                } else if (fuel.includes('cng') || fuel.includes('metan')) {
+                    vehicleData.fuelDisplay = 'CNG';
+                } else {
+                    vehicleData.fuelDisplay = result._paliwo;
+                }
+            }
+            
+            // Masy
+            if (result._masaWlasna) {
+                const massMatch = result._masaWlasna.match(/([\d,.]+)/);
+                if (massMatch) vehicleData.weight = Math.round(parseFloat(massMatch[1].replace(',', '.')));
+            }
+            if (result._masaDop) {
+                const massMatch = result._masaDop.match(/([\d,.]+)/);
+                if (massMatch) vehicleData.maxMass = Math.round(parseFloat(massMatch[1].replace(',', '.')));
+            }
+            
+            // Miejsca siedzące
+            if (result._miejscaSiedzace) {
+                const seatsMatch = result._miejscaSiedzace.match(/(\d+)/);
+                if (seatsMatch) vehicleData.seats = parseInt(seatsMatch[1]);
+            }
+            
+            // Seria dowodu
+            if (result._seriaDowodu) vehicleData.documentSeries = result._seriaDowodu;
+            
+            // === DANE WŁAŚCICIELA/KIEROWCY ===
+            // Właściciel pojazdu
+            if (result._wlasciciel) {
+                vehicleData.ownerName = result._wlasciciel;
+            }
+            if (result._adresWlasciciela) {
+                vehicleData.ownerAddress = fixGluedAddress(result._adresWlasciciela);
+            }
+            // Posiadacz dowodu (użytkownik)
+            if (result._posiadacz) {
+                vehicleData.holderName = result._posiadacz;
+            }
+            if (result._adresPosiadacza) {
+                vehicleData.holderAddress = fixGluedAddress(result._adresPosiadacza);
+            }
+            // Główny "owner" do pola formularza - posiadacz lub właściciel
+            if (!vehicleData.owner) {
+                vehicleData.owner = result._wlasciciel || result._posiadacz || '';
+            }
+            
+            console.log('Android DR: wynik parsowania:', JSON.stringify(vehicleData).substring(0, 300));
+            
+            return vehicleData;
+        }
+
+        // Naprawia sklejone adresy z polskich dowodów rejestracyjnych
+        // np. "59-623GOLEJÓWGOLEJÓW50" → "59-623 GOLEJÓW, GOLEJÓW 50"
+        // np. "59-600LWÓWEKŚLĄSKISZPITALNA4" → "59-600 LWÓWEK ŚLĄSKI, SZPITALNA 4"
+        function fixGluedAddress(addr) {
+            if (!addr || typeof addr !== 'string') return addr;
+            addr = addr.trim();
+            
+            // Jeśli ma spacje, prawdopodobnie jest OK
+            if (/\s/.test(addr) && !/^\d{2}-\d{3}[A-ZĄĆĘŁŃÓŚŹŻ]/.test(addr)) return addr;
+            
+            // Krok 1: Wyciągnij kod pocztowy (XX-XXX)
+            var m = addr.match(/^(\d{2}-\d{3})(.*)$/);
+            if (!m) return addr;
+            
+            var postal = m[1];
+            var rest = m[2].trim();
+            
+            if (!rest) return postal;
+            
+            // Krok 2: Oddziel numer domu (cyfry na końcu, opcjonalnie z literą lub /nrMieszkania)
+            var m2 = rest.match(/^(.*?)(\d+[A-Za-z]?(?:\/\d+[A-Za-z]?)?)$/);
+            if (!m2) return postal + ' ' + rest;
+            
+            var textPart = m2[1];
+            var numPart = m2[2];
+            
+            if (!textPart) return postal + ' ' + numPart;
+            
+            // Krok 3: Rozdziel sklejony tekst
+            // Szukaj powtórzeń (GOLEJÓWGOLEJÓW = miejscowość + adres)
+            var result = '';
+            var half = Math.floor(textPart.length / 2);
+            
+            // Sprawdź czy pierwsza połowa === druga połowa (identyczna miejscowość i ulica)
+            if (half >= 3 && textPart.substring(0, half).toUpperCase() === textPart.substring(half).toUpperCase()) {
+                result = postal + ' ' + textPart.substring(0, half) + ', ' + textPart.substring(half) + ' ' + numPart;
+            } else {
+                // Spróbuj znaleźć powtórzenie innej długości
+                var found = false;
+                for (var len = 3; len <= textPart.length - 3; len++) {
+                    var part1 = textPart.substring(0, len);
+                    var remaining = textPart.substring(len);
+                    if (remaining.toUpperCase().startsWith(part1.toUpperCase())) {
+                        // Znaleziono powtórzenie
+                        var afterRepeat = remaining.substring(part1.length);
+                        if (afterRepeat) {
+                            result = postal + ' ' + part1 + ', ' + remaining + ' ' + numPart;
+                        } else {
+                            result = postal + ' ' + part1 + ', ' + remaining + ' ' + numPart;
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    // Wstaw spację po kodzie i przed numerem
+                    // Spróbuj rozdzielić na granicy wielka-wielka litera
+                    var split = textPart.replace(/([a-ząćęłńóśźż])([A-ZĄĆĘŁŃÓŚŹŻ])/g, '$1 $2');
+                    result = postal + ' ' + split + ' ' + numPart;
+                }
+            }
+            
+            console.log('fixGluedAddress: "' + addr + '" → "' + result + '"');
+            return result;
         }
 
         // === OCR CARQ.PL - Tesseract.js v7.2 ===
@@ -7450,6 +7892,7 @@ P.3:P LPG`;
                 if (vehicleData && Object.keys(vehicleData).length >= 2) {
                     // Sukces!
                     vehicleData._format = 'OCR carq.pl';
+                    vehicleData._source = 'carq_ocr';
                     showQRDataPreview(vehicleData, 'OCR carq.pl');
                     console.log('OCR: znaleziono dane pojazdu:', vehicleData);
                 } else {
