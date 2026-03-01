@@ -615,6 +615,43 @@
             background: #545b62;
         }
     </style>
+
+    <!-- Firebase SDK v10 (modular) -->
+    <script type="module">
+      // =================== FIREBASE CONFIG ===================
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+      import { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp }
+        from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyAmaoBLYkvdy27UfoRSMeFVs11Cjtk6UPo",
+        authDomain: "moje-aplikacje-87790.firebaseapp.com",
+        projectId: "moje-aplikacje-87790",
+        storageBucket: "moje-aplikacje-87790.firebasestorage.app",
+        messagingSenderId: "232192461701",
+        appId: "1:232192461701:web:733fec66599ab64ded92ec"
+      };
+
+      const fbApp = initializeApp(firebaseConfig);
+      const db = getFirestore(fbApp);
+
+      // Stały ID użytkownika (aplikacja prywatna z własnym loginem)
+      const USER_DOC = 'andy';
+      const DATA_COLLECTION = 'warsztat_data';
+      const SETTINGS_COLLECTION = 'warsztat_settings';
+
+      // Udostępnij globalnie
+      window._firestore = db;
+      window._fbDoc = doc(db, DATA_COLLECTION, USER_DOC);
+      window._fbSettingsDoc = doc(db, SETTINGS_COLLECTION, USER_DOC);
+      window._fbServerTimestamp = serverTimestamp;
+      window._fbSetDoc = setDoc;
+      window._fbGetDoc = getDoc;
+      window._fbOnSnapshot = onSnapshot;
+      window._firebaseReady = true;
+
+      console.log('[Firebase] SDK załadowany, baza podłączona');
+    </script>
 </head>
 <body>
     <div class="container">
@@ -1705,6 +1742,145 @@ Przykład:
     </div>
 
     <script>
+
+        // =================== FIREBASE SYNC ===================
+        let _fbSyncTimeout = null;
+        let _fbListenerActive = false;
+
+        // Zapisz wszystkie dane główne do Firebase (z debounce 2s)
+        function syncToFirebase() {
+            if (!window._firebaseReady || !window._fbDoc) return;
+            if (_fbSyncTimeout) clearTimeout(_fbSyncTimeout);
+            _fbSyncTimeout = setTimeout(async function() {
+                try {
+                    const data = {
+                        clients: clients || [],
+                        vehicles: vehicles || [],
+                        orders: orders || [],
+                        documents: documents || [],
+                        services: services || [],
+                        products: products || [],
+                        priorities: priorities || [],
+                        updatedAt: window._fbServerTimestamp()
+                    };
+                    await window._fbSetDoc(window._fbDoc, data);
+                    console.log('[Firebase] Dane zsynchronizowane ✓');
+                    showFirebaseStatus('✓ Zsynchronizowano', '#28a745');
+                } catch(e) {
+                    console.error('[Firebase] Błąd zapisu:', e);
+                    showFirebaseStatus('⚠ Błąd sync', '#dc3545');
+                }
+            }, 2000);
+        }
+
+        // Zapisz ustawienia firmy do Firebase
+        async function syncSettingsToFirebase() {
+            if (!window._firebaseReady || !window._fbSettingsDoc) return;
+            try {
+                const settings = {
+                    companyName: localStorage.getItem('companyName') || '',
+                    companyAddress: localStorage.getItem('companyAddress') || '',
+                    companyNIP: localStorage.getItem('companyNIP') || '',
+                    companyPhone: localStorage.getItem('companyPhone') || '',
+                    companyEmail: localStorage.getItem('companyEmail') || '',
+                    documentFooter: localStorage.getItem('documentFooter') || '',
+                    simpleMode: localStorage.getItem('simpleMode') || 'false',
+                    logoFit: localStorage.getItem('logoFit') || 'contain',
+                    updatedAt: window._fbServerTimestamp()
+                };
+                await window._fbSetDoc(window._fbSettingsDoc, settings);
+            } catch(e) {
+                console.error('[Firebase] Błąd zapisu ustawień:', e);
+            }
+        }
+
+        // Wczytaj dane z Firebase przy starcie
+        async function loadFromFirebase() {
+            if (!window._firebaseReady || !window._fbDoc) return;
+            try {
+                showFirebaseStatus('⟳ Ładowanie z chmury...', '#007bff');
+                const snap = await window._fbGetDoc(window._fbDoc);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data.clients) { clients = data.clients; localStorage.setItem('clients', JSON.stringify(clients)); }
+                    if (data.vehicles) { vehicles = data.vehicles; localStorage.setItem('vehicles', JSON.stringify(vehicles)); }
+                    if (data.orders) { orders = data.orders; localStorage.setItem('orders', JSON.stringify(orders)); }
+                    if (data.documents) { documents = data.documents; localStorage.setItem('documents', JSON.stringify(documents)); }
+                    if (data.services) { services = data.services; localStorage.setItem('services', JSON.stringify(services)); }
+                    if (data.products) { products = data.products; localStorage.setItem('products', JSON.stringify(products)); }
+                    if (data.priorities) { priorities = data.priorities; localStorage.setItem('priorities', JSON.stringify(priorities)); }
+                    console.log('[Firebase] Dane wczytane z chmury ✓');
+                    showFirebaseStatus('✓ Dane z chmury', '#28a745');
+                } else {
+                    // Brak danych w Firebase - wyślij lokalne
+                    console.log('[Firebase] Brak danych w chmurze, wysyłam lokalne...');
+                    syncToFirebase();
+                }
+
+                // Wczytaj ustawienia firmy z Firebase
+                const settSnap = await window._fbGetDoc(window._fbSettingsDoc);
+                if (settSnap.exists()) {
+                    const s = settSnap.data();
+                    if (s.companyName) localStorage.setItem('companyName', s.companyName);
+                    if (s.companyAddress) localStorage.setItem('companyAddress', s.companyAddress);
+                    if (s.companyNIP) localStorage.setItem('companyNIP', s.companyNIP);
+                    if (s.companyPhone) localStorage.setItem('companyPhone', s.companyPhone);
+                    if (s.companyEmail) localStorage.setItem('companyEmail', s.companyEmail);
+                    if (s.documentFooter) localStorage.setItem('documentFooter', s.documentFooter);
+                    if (s.simpleMode) localStorage.setItem('simpleMode', s.simpleMode);
+                    if (s.logoFit) localStorage.setItem('logoFit', s.logoFit);
+                }
+
+            } catch(e) {
+                console.error('[Firebase] Błąd wczytywania:', e);
+                showFirebaseStatus('⚠ Offline (lokalne dane)', '#ffc107');
+            }
+        }
+
+        // Nasłuch na zmiany z innych urządzeń (realtime sync)
+        function startFirebaseListener() {
+            if (_fbListenerActive || !window._firebaseReady) return;
+            _fbListenerActive = true;
+            let firstCall = true;
+            window._fbOnSnapshot(window._fbDoc, function(snap) {
+                if (firstCall) { firstCall = false; return; } // Pomiń pierwsze wywołanie (to nasze dane)
+                if (!snap.exists()) return;
+                const data = snap.data();
+                // Sprawdź czy dane są nowsze niż lokalne (by uniknąć pętli)
+                let changed = false;
+                if (data.clients) { clients = data.clients; localStorage.setItem('clients', JSON.stringify(clients)); changed = true; }
+                if (data.vehicles) { vehicles = data.vehicles; localStorage.setItem('vehicles', JSON.stringify(vehicles)); changed = true; }
+                if (data.orders) { orders = data.orders; localStorage.setItem('orders', JSON.stringify(orders)); changed = true; }
+                if (data.documents) { documents = data.documents; localStorage.setItem('documents', JSON.stringify(documents)); changed = true; }
+                if (data.services) { services = data.services; localStorage.setItem('services', JSON.stringify(services)); changed = true; }
+                if (data.products) { products = data.products; localStorage.setItem('products', JSON.stringify(products)); changed = true; }
+                if (data.priorities) { priorities = data.priorities; localStorage.setItem('priorities', JSON.stringify(priorities)); changed = true; }
+                if (changed) {
+                    console.log('[Firebase] Dane zaktualizowane z innego urządzenia');
+                    showFirebaseStatus('↓ Zaktualizowano z chmury', '#17a2b8');
+                    try { loadData(); } catch(e) {}
+                }
+            });
+        }
+
+        // Wyświetl status synchronizacji
+        function showFirebaseStatus(msg, color) {
+            let el = document.getElementById('_fbStatus');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = '_fbStatus';
+                el.style.cssText = 'position:fixed;bottom:10px;right:10px;padding:6px 12px;border-radius:4px;' +
+                    'font-size:12px;color:white;z-index:9999;transition:opacity 0.5s;pointer-events:none;';
+                document.body.appendChild(el);
+            }
+            el.style.background = color;
+            el.style.opacity = '1';
+            el.textContent = '☁ ' + msg;
+            clearTimeout(el._hideTimer);
+            el._hideTimer = setTimeout(function() { el.style.opacity = '0'; }, 4000);
+        }
+        // =================== KONIEC FIREBASE SYNC ===================
+
         // System logowania
         function checkLogin() {
             const validLogin = 'andy';
@@ -1797,8 +1973,13 @@ Przykład:
         // Funkcja inicjalizacji po zalogowaniu
         function initializeAppAfterLogin() {
             showSection('clients');
-            loadData();
-            loadCompanySettings();
+            // Najpierw wczytaj z Firebase, potem odśwież UI
+            (async function() {
+                await loadFromFirebase();
+                loadData();
+                loadCompanySettings();
+                startFirebaseListener();
+            })();
             // Autosejw ustawień + przycisk Zapisz
             try {
                 ['companyName','companyAddress','companyNIP','companyPhone','companyEmail','documentFooter'].forEach(function(id){
@@ -4045,6 +4226,8 @@ Przykład:
             localStorage.setItem('companyEmail', document.getElementById('companyEmail').value);
             localStorage.setItem('documentFooter', document.getElementById('documentFooter').value);
             localStorage.setItem('simpleMode', document.getElementById('simpleMode').checked);
+            // Firebase sync ustawień
+            try { syncSettingsToFirebase(); } catch(e) {}
             localStorage.setItem('logoFit', document.getElementById('logoFitCover') && document.getElementById('logoFitCover').checked ? 'cover' : 'contain');
             localStorage.setItem('printCompact', document.getElementById('printCompact') && document.getElementById('printCompact').checked ? 'true' : 'false');
             localStorage.setItem('printNoLogo', document.getElementById('printNoLogo') && document.getElementById('printNoLogo').checked ? 'true' : 'false');
@@ -4404,6 +4587,8 @@ Przykład:
             localStorage.setItem('services', JSON.stringify(services));
             localStorage.setItem('products', JSON.stringify(products));
             saveCompanySettings();
+            // Firebase sync (debounce 2s)
+            try { syncToFirebase(); } catch(e) {}
             
             // Jeśli włączony automatyczny zapis do pliku
             if (document.getElementById('autoSaveToFile') && document.getElementById('autoSaveToFile').checked) {
