@@ -652,8 +652,103 @@
 
       console.log('[Firebase] SDK załadowany, baza podłączona');
     </script>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#007bff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Warsztat">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Program Warsztatowy">
+
+    <!-- Ikona PWA -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23007bff'/><text y='.9em' font-size='80' fill='white'>🔧</text></svg>">
+
+    <!-- Web App Manifest (inline) -->
+    <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Program Warsztatowy&quot;,&quot;short_name&quot;:&quot;Warsztat&quot;,&quot;description&quot;:&quot;System kosztorysów i zleceń warsztatowych&quot;,&quot;start_url&quot;:&quot;.&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23f5f5f5&quot;,&quot;theme_color&quot;:&quot;%23007bff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23007bff'/><text y='.85em' x='.05em' font-size='150' fill='white'>🔧</text></svg>&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;},{&quot;src&quot;:&quot;data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%23007bff'/><text y='.85em' x='.05em' font-size='400' fill='white'>🔧</text></svg>&quot;,&quot;sizes&quot;:&quot;512x512&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
+
+    <style>
+        /* Ukryj baner gdy już zainstalowane jako PWA */
+        @media (display-mode: standalone) {
+            #pwaInstallPrompt { display: none !important; }
+        }
+        #pwaInstallPrompt {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            padding: 12px 16px;
+            z-index: 99999;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        #pwaInstallPrompt .pwa-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        #pwaInstallPrompt .pwa-text h3 {
+            margin: 0 0 2px 0;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        #pwaInstallPrompt .pwa-text p {
+            margin: 0;
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        #pwaInstallPrompt .pwa-btns {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+        #pwaInstallBtn {
+            background: white;
+            color: #007bff;
+            border: none;
+            padding: 7px 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        #pwaInstallBtn:hover { background: #e9f0ff; }
+        #pwaDismissBtn {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.6);
+            padding: 7px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        #pwaDismissBtn:hover { background: rgba(255,255,255,0.15); }
+    </style>
 </head>
 <body>
+
+    <!-- PWA Install Prompt Banner -->
+    <div id="pwaInstallPrompt">
+        <div class="pwa-inner">
+            <div class="pwa-text">
+                <h3>📱 Zainstaluj aplikację</h3>
+                <p>Dodaj do ekranu głównego dla szybszego dostępu</p>
+            </div>
+            <div class="pwa-btns">
+                <button id="pwaInstallBtn">⬇ Zainstaluj</button>
+                <button id="pwaDismissBtn">✕</button>
+            </div>
+        </div>
+    </div>
+
+
     <div class="container">
         <h1>Program Warsztatowy</h1>
         
@@ -1880,6 +1975,84 @@ Przykład:
             el._hideTimer = setTimeout(function() { el.style.opacity = '0'; }, 4000);
         }
         // =================== KONIEC FIREBASE SYNC ===================
+
+
+        // =================== PWA INSTALL ===================
+        let _pwaDeferredPrompt = null;
+
+        // Nasłuchuj na zdarzenie beforeinstallprompt (Chrome/Android)
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            _pwaDeferredPrompt = e;
+            console.log('[PWA] Możliwość instalacji dostępna');
+
+            // Nie pokazuj jeśli użytkownik już odrzucił
+            if (localStorage.getItem('pwaPromptDismissed') === 'true') return;
+
+            const banner = document.getElementById('pwaInstallPrompt');
+            if (banner) banner.style.display = 'block';
+        });
+
+        // Przycisk "Zainstaluj"
+        document.addEventListener('DOMContentLoaded', function() {
+            const installBtn = document.getElementById('pwaInstallBtn');
+            const dismissBtn = document.getElementById('pwaDismissBtn');
+            const banner    = document.getElementById('pwaInstallPrompt');
+
+            if (installBtn) {
+                installBtn.addEventListener('click', async function() {
+                    if (banner) banner.style.display = 'none';
+                    if (_pwaDeferredPrompt) {
+                        _pwaDeferredPrompt.prompt();
+                        const result = await _pwaDeferredPrompt.userChoice;
+                        console.log('[PWA] Wynik instalacji:', result.outcome);
+                        _pwaDeferredPrompt = null;
+                    }
+                });
+            }
+
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', function() {
+                    if (banner) banner.style.display = 'none';
+                    localStorage.setItem('pwaPromptDismissed', 'true');
+                });
+            }
+        });
+
+        // Informacja gdy aplikacja zainstalowana
+        window.addEventListener('appinstalled', function() {
+            console.log('[PWA] Aplikacja zainstalowana pomyślnie ✓');
+            const banner = document.getElementById('pwaInstallPrompt');
+            if (banner) banner.style.display = 'none';
+            _pwaDeferredPrompt = null;
+        });
+
+        // Service Worker — wymagany przez Chrome do pokazania przycisku instalacji
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                const swCode = `
+                    const CACHE_NAME = 'warsztat-v15-cache';
+                    self.addEventListener('install', function(e) {
+                        console.log('[SW] Zainstalowany');
+                        self.skipWaiting();
+                    });
+                    self.addEventListener('activate', function(e) {
+                        console.log('[SW] Aktywowany');
+                        e.waitUntil(clients.claim());
+                    });
+                    self.addEventListener('fetch', function(e) {
+                        // Nie cachujemy — tylko rejestracja dla PWA
+                        return;
+                    });
+                `;
+                const blob  = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(swUrl)
+                    .then(function(r) { console.log('[SW] Zarejestrowany ✓', r.scope); })
+                    .catch(function(e) { console.log('[SW] Błąd rejestracji:', e); });
+            });
+        }
+        // =================== KONIEC PWA ===================
 
         // System logowania
         function checkLogin() {
