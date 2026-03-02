@@ -798,6 +798,7 @@
                         <th>Paliwo</th>
                         <th>Przebieg</th>
                         <th>Właściciel</th>
+                        <th>Uwagi</th>
                         <th>Akcje</th>
                     </tr>
                 </thead>
@@ -1275,6 +1276,10 @@
             <div class="form-group">
                 <label>Przebieg początkowy (km):</label>
                 <input type="number" id="vehicleMileage" min="0">
+            </div>
+            <div class="form-group">
+                <label>Uwagi techniczne (specyficzne dla auta):</label>
+                <textarea id="vehicleNotes" placeholder="Wpisz numery nietypowych filtrów, problemy z odpowietrzaniem itp..."></textarea>
             </div>
             </div> <!-- Koniec manualVehicleEntry -->
             
@@ -2423,6 +2428,7 @@ Przykład:
             document.getElementById('vehicleOwner').value = '';
             document.getElementById('vehicleOwnerAddress').value = '';
             document.getElementById('vehicleMileage').value = '';
+            if(document.getElementById('vehicleNotes')) document.getElementById('vehicleNotes').value = '';
             document.getElementById('vehicleModal').style.display = 'block';
         }
 
@@ -2443,6 +2449,7 @@ Przykład:
             document.getElementById('vehicleOwner').value = vehicle.owner;
             document.getElementById('vehicleOwnerAddress').value = vehicle.ownerAddress || '';
             document.getElementById('vehicleMileage').value = vehicle.mileage || '';
+            if(document.getElementById('vehicleNotes')) document.getElementById('vehicleNotes').value = vehicle.notes || '';
             document.getElementById('vehicleModal').style.display = 'block';
         }
 
@@ -2460,17 +2467,18 @@ Przykład:
             const owner = document.getElementById('vehicleOwner').value.trim();
             const ownerAddress = document.getElementById('vehicleOwnerAddress').value.trim();
             const mileage = document.getElementById('vehicleMileage').value;
+            const notes = document.getElementById('vehicleNotes') ? document.getElementById('vehicleNotes').value.trim() : '';
             
             if (!registration || !brand || !model) {
                 alert('Rejestracja, marka i model są wymagane');
                 return;
             }
             
-            const vehicle = { 
-                registration: registration, 
-                vin: vin, 
-                brand: brand, 
-                model: model, 
+            const vehicle = {
+                registration: registration,
+                vin: vin,
+                brand: brand,
+                model: model,
                 year: year ? parseInt(year) : null,
                 engineCode: engineCode,
                 capacity: capacity || null,
@@ -2480,13 +2488,15 @@ Przykład:
                 owner: owner,
                 ownerAddress: ownerAddress || null,
                 mileage: mileage ? parseInt(mileage) : null,
+                notes: notes,
                 mileageHistory: []
             };
             
-            if (currentEditingVehicle !== null) {
+            if (currentEditingVehicle !== null && typeof currentEditingVehicle === 'number' && vehicles[currentEditingVehicle]) {
                 // Zachowaj historię przebiegu przy edycji
                 vehicle.mileageHistory = vehicles[currentEditingVehicle].mileageHistory || [];
                 vehicles[currentEditingVehicle] = vehicle;
+                currentEditingVehicle = null; // Reset po edycji
             } else {
                 // Dodaj początkowy przebieg do historii
                 if (mileage) {
@@ -2560,7 +2570,7 @@ Przykład:
                 if (vehicle.capacity) silnikInfo += vehicle.capacity + ' cm³';
                 if (vehicle.power) silnikInfo += (silnikInfo ? ' / ' : '') + vehicle.power + ' kW';
                 if (!silnikInfo) silnikInfo = vehicle.engineCode || '-';
-                row.innerHTML = '\n                    <td>'+escapeHtml(vehicle.registration)+'</td>\n                    <td>'+escapeHtml(vehicle.brand)+'</td>\n                    <td>'+escapeHtml(vehicle.model)+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+'</td>\n                    <td>'+escapeHtml(silnikInfo)+'</td>\n                    <td>'+escapeHtml(vehicle.fuel || '-')+'</td>\n                    <td>'+currentMileage+'</td>\n                    <td>'+escapeHtml(vehicle.owner)+'</td>\n                    <td class="action-buttons">\n                        <button class="btn btn-primary" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                ';
+                row.innerHTML = '\n                    <td>'+escapeHtml(vehicle.registration)+'</td>\n                    <td>'+escapeHtml(vehicle.brand)+'</td>\n                    <td>'+escapeHtml(vehicle.model)+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+'</td>\n                    <td>'+escapeHtml(silnikInfo)+'</td>\n                    <td>'+escapeHtml(vehicle.fuel || '-')+'</td>\n                    <td>'+currentMileage+'</td>\n                    <td>'+escapeHtml(vehicle.owner)+'</td>\n                    <td>'+escapeHtml(vehicle.notes || '')+'</td>\n                    <td class="action-buttons">\n                        <button class="btn btn-primary" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                ';
             });
         }
 
@@ -3175,6 +3185,10 @@ Przykład:
                         var ownerLine = '<strong>Właściciel:</strong> ' + escapeHtml(vd.owner);
                         if (vd.ownerAddress) ownerLine += ', ' + escapeHtml(vd.ownerAddress);
                         vehicleDetailsHtml += '<p>' + ownerLine + '</p>';
+                    }
+                    // Uwagi techniczne
+                    if (vd.notes) {
+                        vehicleDetailsHtml += '<p style="margin-top: 5px; color: #d9534f;"><strong>Uwagi:</strong> ' + escapeHtml(vd.notes) + '</p>';
                     }
                     vehicleDetailsHtml += '</div>';
                 } else {
