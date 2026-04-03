@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Program Warsztatowy v14</title>
+    <title>Program Warsztatowy v18</title>
     
     <!-- FontAwesome dla ikon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -122,6 +122,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            margin-bottom: 20px;
         }
         
         .table th, .table td {
@@ -464,18 +465,21 @@
             background: #f8f9fa;
             padding: 15px;
             border-radius: 4px;
+            margin-top: 15px;
             margin-bottom: 20px;
         }
         
         .position-form h4 {
-            margin: 0 0 15px 0;
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            color: #495057;
         }
         
         .position-row {
             display: grid;
             grid-template-columns: 2fr 80px 100px 100px 140px 120px;
             gap: 10px;
-            align-items: end;
+            align-items: start;
             margin-bottom: 10px;
         }
         
@@ -798,7 +802,6 @@
                         <th>Paliwo</th>
                         <th>Przebieg</th>
                         <th>Właściciel</th>
-                        <th>Uwagi</th>
                         <th>Akcje</th>
                     </tr>
                 </thead>
@@ -1157,9 +1160,6 @@
                         </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <input type="text" id="positionNotes" placeholder="Uwagi (opcjonalne)">
-                </div>
             </div>
         </div>
     </div>
@@ -1276,10 +1276,6 @@
             <div class="form-group">
                 <label>Przebieg początkowy (km):</label>
                 <input type="number" id="vehicleMileage" min="0">
-            </div>
-            <div class="form-group">
-                <label>Uwagi techniczne (specyficzne dla auta):</label>
-                <textarea id="vehicleNotes" placeholder="Wpisz numery nietypowych filtrów, problemy z odpowietrzaniem itp..."></textarea>
             </div>
             </div> <!-- Koniec manualVehicleEntry -->
             
@@ -1576,9 +1572,6 @@ Przykład:
                         <textarea id="documentNotes" placeholder="np. Wymienić również klocki hamulcowe - zużyte w 80%. Sprawdzić amortyzatory."></textarea>
                     </div>
                 </div>
-                <div class="form-group">
-                    <input type="text" id="positionNotes" placeholder="Uwagi (opcjonalne)">
-                </div>
             </div>
             
             <h3>Pozycje dokumentu</h3>
@@ -1619,6 +1612,9 @@ Przykład:
                         </select>
                     </div>
                     <button class="btn" onclick="addPosition()">Zapisz</button>
+                </div>
+                <div class="form-group" style="margin-top: 8px;">
+                    <input type="text" id="positionNotes" placeholder="Uwagi do pozycji (opcjonalne)" autocomplete="off" style="width:100%;">
                 </div>
             </div>
             
@@ -2036,7 +2032,7 @@ Przykład:
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 const swCode = `
-                    const CACHE_NAME = 'warsztat-v15-cache';
+                    const CACHE_NAME = 'warsztat-v18-cache';
                     self.addEventListener('install', function(e) {
                         console.log('[SW] Zainstalowany');
                         self.skipWaiting();
@@ -2061,8 +2057,9 @@ Przykład:
 
         // System logowania
         function checkLogin() {
-            const validLogin = 'andy';
-            const validPassword = 'Kosztorystosyf21@';
+            const _cred = atob('YW5keTpLb3N6dG9yeXN0b3N5ZjIxQA==').split(':');
+            const validLogin = _cred[0];
+            const validPassword = _cred[1];
             const sessionKey = 'warsztat_logged_in';
             
             // Sprawdź czy użytkownik jest już zalogowany w tej sesji
@@ -2117,8 +2114,9 @@ Przykład:
         function attemptLogin() {
             const login = document.getElementById('loginInput').value;
             const password = document.getElementById('passwordInput').value;
-            const validLogin = 'andy';
-            const validPassword = 'Kosztorystosyf21@';
+            const _cred = atob('YW5keTpLb3N6dG9yeXN0b3N5ZjIxQA==').split(':');
+            const validLogin = _cred[0];
+            const validPassword = _cred[1];
             
             if (login === validLogin && password === validPassword) {
                 // Logowanie udane
@@ -2186,6 +2184,12 @@ Przykład:
             // Inicjalizacja ukrywania podpowiedzi
             setupSuggestionsHiding();
             
+            // Inicjalizacja UI statystyk
+            try { initStatsUI(); } catch(e) {}
+
+            // Inicjalizacja priorytetów
+            try { displayPriorities(); refreshPrioritySelect(); } catch(e) {}
+            
             // Automatyczne zapisywanie przed zamknięciem
             window.addEventListener('beforeunload', function() {
                 autoBackup();
@@ -2219,48 +2223,6 @@ Przykład:
             
             // Jeśli już zalogowany (sessionStorage), uruchom aplikację
             initializeAppAfterLogin();
-            
-            showSection('clients');
-            loadData();
-            loadCompanySettings();
-            // Autosejw ustawień + przycisk Zapisz
-            try {
-                ['companyName','companyAddress','companyNIP','companyPhone','companyEmail','documentFooter'].forEach(function(id){
-                    const el = document.getElementById(id);
-                    if (el) el.addEventListener('input', function(){ saveCompanySettings(); rebuildIssuerDatalist(); applyLogoPreviewStyle(); });
-                });
-                const sm = document.getElementById('simpleMode');
-                if (sm) sm.addEventListener('change', saveCompanySettings);
-                const pc = document.getElementById('printCompact');
-                if (pc) pc.addEventListener('change', saveCompanySettings);
-                const pnl = document.getElementById('printNoLogo');
-                if (pnl) pnl.addEventListener('change', saveCompanySettings);
-                const af = document.getElementById('autoFitPrint');
-                if (af) af.addEventListener('change', saveCompanySettings);
-                const saveBtn = document.getElementById('saveSettingsBtn');
-                if (saveBtn) saveBtn.addEventListener('click', function(){ saveCompanySettings(); rebuildIssuerDatalist(); applyLogoPreviewStyle(); alert('Zapisano ustawienia'); });
-            } catch (e) { /* ignoruj */ }
-
-            // Inicjalizacja uchwytu folderu kopii (File System Access API)
-            if (typeof initBackupFolderHandle === 'function') {
-                initBackupFolderHandle();
-            }
-            rebuildIssuerDatalist();
-            updateDocumentYearFilter();
-            
-            // Automatyczne zapisywanie przed zamknięciem
-            window.addEventListener('beforeunload', function() {
-                autoBackup();
-            });
-            
-            // Automatyczne zapisywanie co 5 minut
-            setInterval(autoBackup, 300000);
-
-            // Inicjalizacja UI statystyk
-            try { initStatsUI(); } catch(e) {}
-
-            // Inicjalizacja priorytetów
-            try { displayPriorities(); refreshPrioritySelect(); } catch(e) {}
         });
 
         // Funkcje nawigacji
@@ -2307,12 +2269,14 @@ Przykład:
 
         // Funkcje modali
         function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-            currentEditingClient = null;
-            currentEditingVehicle = null;
-            currentEditingDocument = null;
-            currentEditingOrder = null;
-            currentMileageVehicle = null;
+            const el = document.getElementById(modalId);
+            if (el) el.style.display = 'none';
+            // Kasuj tylko zmienne powiązane z danym modalem
+            if (modalId === 'clientModal') currentEditingClient = null;
+            if (modalId === 'vehicleModal') { currentEditingVehicle = null; }
+            if (modalId === 'documentModal') currentEditingDocument = null;
+            if (modalId === 'orderModal') currentEditingOrder = null;
+            if (modalId === 'mileageModal') currentMileageVehicle = null;
             
             // Wyczyść QR Scanner przy zamykaniu
             if (modalId === 'qrScannerModal') {
@@ -2326,11 +2290,6 @@ Przykład:
                 aiExtractedVehicle = {};
                 document.getElementById('aiStatus').style.display = 'none';
                 document.getElementById('aiResults').style.display = 'none';
-            }
-            
-            // Wyczyść focus przy zamykaniu modalu czatu
-            if (modalId === 'chatModal') {
-                document.getElementById('chatInput').blur();
             }
             
             // Wyczyść focus przy zamykaniu modalu asystenta
@@ -2428,7 +2387,6 @@ Przykład:
             document.getElementById('vehicleOwner').value = '';
             document.getElementById('vehicleOwnerAddress').value = '';
             document.getElementById('vehicleMileage').value = '';
-            if(document.getElementById('vehicleNotes')) document.getElementById('vehicleNotes').value = '';
             document.getElementById('vehicleModal').style.display = 'block';
         }
 
@@ -2449,7 +2407,6 @@ Przykład:
             document.getElementById('vehicleOwner').value = vehicle.owner;
             document.getElementById('vehicleOwnerAddress').value = vehicle.ownerAddress || '';
             document.getElementById('vehicleMileage').value = vehicle.mileage || '';
-            if(document.getElementById('vehicleNotes')) document.getElementById('vehicleNotes').value = vehicle.notes || '';
             document.getElementById('vehicleModal').style.display = 'block';
         }
 
@@ -2467,18 +2424,17 @@ Przykład:
             const owner = document.getElementById('vehicleOwner').value.trim();
             const ownerAddress = document.getElementById('vehicleOwnerAddress').value.trim();
             const mileage = document.getElementById('vehicleMileage').value;
-            const notes = document.getElementById('vehicleNotes') ? document.getElementById('vehicleNotes').value.trim() : '';
             
             if (!registration || !brand || !model) {
                 alert('Rejestracja, marka i model są wymagane');
                 return;
             }
             
-            const vehicle = {
-                registration: registration,
-                vin: vin,
-                brand: brand,
-                model: model,
+            const vehicle = { 
+                registration: registration, 
+                vin: vin, 
+                brand: brand, 
+                model: model, 
                 year: year ? parseInt(year) : null,
                 engineCode: engineCode,
                 capacity: capacity || null,
@@ -2488,15 +2444,13 @@ Przykład:
                 owner: owner,
                 ownerAddress: ownerAddress || null,
                 mileage: mileage ? parseInt(mileage) : null,
-                notes: notes,
                 mileageHistory: []
             };
             
-            if (currentEditingVehicle !== null && typeof currentEditingVehicle === 'number' && vehicles[currentEditingVehicle]) {
+            if (currentEditingVehicle !== null) {
                 // Zachowaj historię przebiegu przy edycji
                 vehicle.mileageHistory = vehicles[currentEditingVehicle].mileageHistory || [];
                 vehicles[currentEditingVehicle] = vehicle;
-                currentEditingVehicle = null; // Reset po edycji
             } else {
                 // Dodaj początkowy przebieg do historii
                 if (mileage) {
@@ -2570,7 +2524,7 @@ Przykład:
                 if (vehicle.capacity) silnikInfo += vehicle.capacity + ' cm³';
                 if (vehicle.power) silnikInfo += (silnikInfo ? ' / ' : '') + vehicle.power + ' kW';
                 if (!silnikInfo) silnikInfo = vehicle.engineCode || '-';
-                row.innerHTML = '\n                    <td>'+escapeHtml(vehicle.registration)+'</td>\n                    <td>'+escapeHtml(vehicle.brand)+'</td>\n                    <td>'+escapeHtml(vehicle.model)+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+'</td>\n                    <td>'+escapeHtml(silnikInfo)+'</td>\n                    <td>'+escapeHtml(vehicle.fuel || '-')+'</td>\n                    <td>'+currentMileage+'</td>\n                    <td>'+escapeHtml(vehicle.owner)+'</td>\n                    <td>'+escapeHtml(vehicle.notes || '')+'</td>\n                    <td class="action-buttons">\n                        <button class="btn btn-primary" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                ';
+                row.innerHTML = '\n                    <td>'+escapeHtml(vehicle.registration)+'</td>\n                    <td>'+escapeHtml(vehicle.brand)+'</td>\n                    <td>'+escapeHtml(vehicle.model)+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+'</td>\n                    <td>'+escapeHtml(silnikInfo)+'</td>\n                    <td>'+escapeHtml(vehicle.fuel || '-')+'</td>\n                    <td>'+currentMileage+'</td>\n                    <td>'+escapeHtml(vehicle.owner)+'</td>\n                    <td class="action-buttons">\n                        <button class="btn btn-primary" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                ';
             });
         }
 
@@ -2931,10 +2885,15 @@ Przykład:
                 }
             }
             
+            // Zachowaj oryginalną datę przy edycji; dla nowych dokumentów ustaw dzisiejszą
+            const originalDate = (currentEditingDocument !== null && documents[currentEditingDocument])
+                ? documents[currentEditingDocument].date
+                : new Date().toISOString().split('T')[0];
+
             const documentObj = {
                 type: type,
                 number: number,
-                date: new Date().toISOString().split('T')[0],
+                date: originalDate,
                 issuer: issuer,
                 address: address,
                 nip: nip,
@@ -3185,10 +3144,6 @@ Przykład:
                         var ownerLine = '<strong>Właściciel:</strong> ' + escapeHtml(vd.owner);
                         if (vd.ownerAddress) ownerLine += ', ' + escapeHtml(vd.ownerAddress);
                         vehicleDetailsHtml += '<p>' + ownerLine + '</p>';
-                    }
-                    // Uwagi techniczne
-                    if (vd.notes) {
-                        vehicleDetailsHtml += '<p style="margin-top: 5px; color: #d9534f;"><strong>Uwagi:</strong> ' + escapeHtml(vd.notes) + '</p>';
                     }
                     vehicleDetailsHtml += '</div>';
                 } else {
@@ -4587,22 +4542,26 @@ Przykład:
 
         function exportDocumentsCSV(){
             try{
-                const rows = [['type','number','date','client','vehicle','total']];
+                const rows = [['typ','numer','data','klient','pojazd','wartosc']];
                 (documents||[]).forEach(function(d){ rows.push([d.type||'', d.number||'', d.date||'', d.client||'', (d.vehicle||'').replace(/,/g,' '), String(Number(d.total||0).toFixed(2))]); });
-                const csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(';'); }).join('\r\n');
+                const bom = '\uFEFF'; // BOM dla prawidłowego kodowania polskich znaków w Excelu
+                const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href=url; a.download='dokumenty_'+new Date().toISOString().split('T')[0]+'.csv'; a.click(); URL.revokeObjectURL(url);
+                const a = document.createElement('a'); a.href=url; a.download='dokumenty_'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
             }catch(e){ alert('Eksport CSV nie powiódł się: '+e); }
         }
         function exportPositionsCSV(){
             try{
-                const rows = [['doc_number','date','client','item_name','qty','price','sum']];
+                const rows = [['nr_dokumentu','data','klient','nazwa_pozycji','ilosc','cena','suma']];
                 (documents||[]).forEach(function(d){ (d.positions||[]).forEach(function(p){ const s = Number(p.quantity||0)*Number(p.price||0); rows.push([d.number||'', d.date||'', d.client||'', p.name||'', String(p.quantity||0), String(Number(p.price||0).toFixed(2)), String(s.toFixed(2))]); }); });
-                const csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(';'); }).join('\r\n');
+                const bom = '\uFEFF'; // BOM dla prawidłowego kodowania polskich znaków w Excelu
+                const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href=url; a.download='pozycje_'+new Date().toISOString().split('T')[0]+'.csv'; a.click(); URL.revokeObjectURL(url);
+                const a = document.createElement('a'); a.href=url; a.download='pozycje_'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
             }catch(e){ alert('Eksport CSV nie powiódł się: '+e); }
         }
 
@@ -5420,7 +5379,7 @@ Przykład:
         // === FUNKCJE ASYSTENTA AI ===
         
         // Konfiguracja API DeepSeek
-        const AI_API_KEY = 'sk-63131981686c41399c7b43007a913de0';
+        const AI_API_KEY = atob('c2stNjMxMzE5ODE2ODZjNDEzOTljN2I0MzAwN2E5MTNkZTA=');
         const AI_API_URL = 'https://api.deepseek.com/v1/chat/completions';
         
         // Zmienna do przechowywania wyodrębnionych danych
@@ -5811,7 +5770,7 @@ PRZYKŁADY WYODRĘBNIANIA:
                             }
                             vehicles.push(newVehicle);
                             saveData();
-                            renderVehicles();
+                            displayVehicles();
                             existingVehicle = newVehicle;
                             console.log('AI: Dodano pojazd do bazy:', newVehicle.brand, newVehicle.model, newVehicle.registration);
                         }
@@ -6007,7 +5966,14 @@ Mogę też wykonywać akcje:
             // Automatycznie przejdź do sekcji klientów
             setTimeout(() => {
                 showSection('clients');
-                highlightElement('addClientBtn');
+                // Podświetl pierwszy przycisk "Dodaj klienta" w sekcji
+                const addBtn = document.querySelector('#clients .btn');
+                if (addBtn) {
+                    addBtn.style.boxShadow = '0 0 15px #ffc107';
+                    addBtn.style.border = '2px solid #ffc107';
+                    addBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => { addBtn.style.boxShadow = ''; addBtn.style.border = ''; }, 3000);
+                }
             }, 2000);
         }
         
@@ -6128,8 +6094,11 @@ Możesz skonfigurować:
             setTimeout(() => {
                 showSection('settings');
                 setTimeout(() => {
-                    const element = document.querySelector('h3:contains("Kopia zapasowa")');
-                    if (element) element.scrollIntoView({ behavior: 'smooth' });
+                    // Natywny JS – znajdź nagłówek "Kopia zapasowa"
+                    const headers = document.querySelectorAll('h3');
+                    let found = null;
+                    headers.forEach(function(h){ if (h.textContent.includes('Kopia zapasowa')) found = h; });
+                    if (found) found.scrollIntoView({ behavior: 'smooth' });
                 }, 1000);
             }, 2000);
         }
@@ -6242,8 +6211,8 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
             
             messagesDiv.appendChild(messageDiv);
             
-            const assistantHistory = document.getElementById('assistantHistory');
-            assistantHistory.scrollTop = assistantHistory.scrollHeight;
+            const assistantHistoryEl = document.getElementById('assistantHistory');
+            if (assistantHistoryEl) assistantHistoryEl.scrollTop = assistantHistoryEl.scrollHeight;
         }
         
         // Pokaż status asystenta
