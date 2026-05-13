@@ -1025,6 +1025,65 @@
                             <input type="checkbox" id="updatePriceFromDocument"> Aktualizuj cenę w słowniku wg ostatniego dokumentu
                         </label>
                     </div>
+
+                    <h3>🤖 Ustawienia sztucznej inteligencji</h3>
+                    <div style="background:#f8f9fa; border:1px solid #ddd; border-radius:8px; padding:12px; margin-bottom:15px;">
+                        <div class="form-group">
+                            <label>Włącz analizę AI:</label>
+                            <select id="aiEnabled">
+                                <option value="true">Tak</option>
+                                <option value="false">Nie</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Dostawca AI:</label>
+                            <select id="aiProvider" onchange="updateAIProviderPreset()">
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="openrouter">OpenRouter</option>
+                                <option value="groq">Groq</option>
+                                <option value="xai">xAI / Grok</option>
+                                <option value="custom">Własny endpoint OpenAI-compatible</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Adres API:</label>
+                            <input type="text" id="aiApiUrl" placeholder="https://api.deepseek.com/v1/chat/completions">
+                        </div>
+                        <div class="form-group">
+                            <label>Model:</label>
+                            <input type="text" id="aiModel" list="aiModelList" placeholder="deepseek-chat">
+                            <datalist id="aiModelList">
+                                <option value="deepseek-chat"></option>
+                                <option value="gpt-4o-mini"></option>
+                                <option value="gpt-4.1-mini"></option>
+                                <option value="openai/gpt-4o-mini"></option>
+                                <option value="llama-3.3-70b-versatile"></option>
+                                <option value="grok-2-latest"></option>
+                            </datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>Klucz API:</label>
+                            <input type="password" id="aiApiKey" placeholder="Wklej klucz API">
+                            <small>Program działa lokalnie, więc klucz jest zapisywany w tej przeglądarce. Domyślnie używany jest dotychczasowy klucz DeepSeek z pliku.</small>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                            <div class="form-group">
+                                <label>Temperatura:</label>
+                                <input type="number" id="aiTemperature" step="0.1" min="0" max="2" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Limit tokenów:</label>
+                                <input type="number" id="aiMaxTokens" min="300" max="8000" value="1800">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn" type="button" onclick="saveAISettings(true)">Zapisz ustawienia AI</button>
+                            <button class="btn btn-primary" type="button" onclick="testAIConnection()">Sprawdź połączenie AI</button>
+                            <button class="btn" type="button" onclick="resetAISettingsToDefault()" style="background:#6c757d;">Przywróć DeepSeek</button>
+                        </div>
+                        <div id="aiSettingsStatus" style="display:none; margin-top:10px; padding:8px; border-radius:4px;"></div>
+                    </div>
                     <div class="form-group">
                         <button class="btn" id="saveSettingsBtn">Zapisz ustawienia</button>
                     </div>
@@ -2171,7 +2230,8 @@ Przykład:
                 const af = document.getElementById('autoFitPrint');
                 if (af) af.addEventListener('change', saveCompanySettings);
                 const saveBtn = document.getElementById('saveSettingsBtn');
-                if (saveBtn) saveBtn.addEventListener('click', function(){ saveCompanySettings(); rebuildIssuerDatalist(); applyLogoPreviewStyle(); alert('Zapisano ustawienia'); });
+                if (saveBtn) saveBtn.addEventListener('click', function(){ saveCompanySettings(); saveAISettings(false); rebuildIssuerDatalist(); applyLogoPreviewStyle(); alert('Zapisano ustawienia'); });
+                try { loadAISettings(); } catch(e) { console.error('Błąd inicjalizacji AI:', e); }
             } catch (e) { console.error('Błąd inicjalizacji przycisków:', e); }
 
             // Inicjalizacja uchwytu folderu kopii (File System Access API)
@@ -2753,7 +2813,7 @@ Przykład:
 
         function addPosition() {
             const name = document.getElementById('positionName').value.trim();
-            const quantity = parseInt(document.getElementById('positionQuantity').value) || 1;
+            const quantity = parseFloat(document.getElementById('positionQuantity').value) || 1;
             const price = parseFloat(document.getElementById('positionPrice').value) || 0;
             const notes = document.getElementById('positionNotes').value.trim();
             const prioritySel = document.getElementById('positionPriority');
@@ -5378,14 +5438,187 @@ Przykład:
 
         // === FUNKCJE ASYSTENTA AI ===
         
-        // Konfiguracja API DeepSeek
+        // Konfiguracja AI - domyślnie DeepSeek, ale można zmienić w Ustawieniach.
+        // Klucz zostaje w pliku celowo, bo aplikacja jest prywatna i lokalna.
         const AI_API_KEY = atob('c2stNjMxMzE5ODE2ODZjNDEzOTljN2I0MzAwN2E5MTNkZTA=');
         const AI_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+        const AI_PROVIDER_PRESETS = {
+            deepseek: { name: 'DeepSeek', apiUrl: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat' },
+            openai: { name: 'OpenAI', apiUrl: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
+            openrouter: { name: 'OpenRouter', apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'openai/gpt-4o-mini' },
+            groq: { name: 'Groq', apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' },
+            xai: { name: 'xAI / Grok', apiUrl: 'https://api.x.ai/v1/chat/completions', model: 'grok-2-latest' },
+            custom: { name: 'Własny endpoint', apiUrl: AI_API_URL, model: 'deepseek-chat' }
+        };
         
         // Zmienna do przechowywania wyodrębnionych danych
         let aiExtractedPositions = [];
         let aiExtractedClient = {};
         let aiExtractedVehicle = {};
+        let aiExtractedTechnicalNotes = '';
+
+        function getDefaultAISettings() {
+            return {
+                enabled: true,
+                provider: 'deepseek',
+                apiUrl: AI_API_URL,
+                model: 'deepseek-chat',
+                apiKey: AI_API_KEY,
+                temperature: 0,
+                maxTokens: 1800
+            };
+        }
+
+        function getAISettings() {
+            const defaults = getDefaultAISettings();
+            let saved = {};
+            try { saved = JSON.parse(localStorage.getItem('aiSettings') || '{}') || {}; } catch(e) { saved = {}; }
+            return Object.assign({}, defaults, saved, {
+                enabled: String(saved.enabled !== undefined ? saved.enabled : defaults.enabled) !== 'false',
+                temperature: Number(saved.temperature !== undefined ? saved.temperature : defaults.temperature),
+                maxTokens: parseInt(saved.maxTokens !== undefined ? saved.maxTokens : defaults.maxTokens, 10) || defaults.maxTokens
+            });
+        }
+
+        function setAISettingsStatus(message, type) {
+            const el = document.getElementById('aiSettingsStatus');
+            if (!el) return;
+            el.style.display = 'block';
+            el.textContent = message;
+            if (type === 'success') { el.style.background = '#e8f5e8'; el.style.color = '#155724'; el.style.border = '1px solid #4caf50'; }
+            else if (type === 'error') { el.style.background = '#ffebee'; el.style.color = '#721c24'; el.style.border = '1px solid #f44336'; }
+            else { el.style.background = '#e3f2fd'; el.style.color = '#0c5460'; el.style.border = '1px solid #2196f3'; }
+        }
+
+        function loadAISettings() {
+            const s = getAISettings();
+            const setVal = function(id, val){ const el = document.getElementById(id); if (el) el.value = val; };
+            setVal('aiEnabled', String(s.enabled));
+            setVal('aiProvider', s.provider || 'deepseek');
+            setVal('aiApiUrl', s.apiUrl || AI_API_URL);
+            setVal('aiModel', s.model || 'deepseek-chat');
+            setVal('aiApiKey', s.apiKey || AI_API_KEY);
+            setVal('aiTemperature', (s.temperature !== undefined ? s.temperature : 0));
+            setVal('aiMaxTokens', s.maxTokens || 1800);
+        }
+
+        function saveAISettings(showAlert) {
+            const current = getAISettings();
+            const val = function(id, fallback){ const el = document.getElementById(id); return el ? el.value : fallback; };
+            const settings = {
+                enabled: val('aiEnabled', String(current.enabled)) !== 'false',
+                provider: val('aiProvider', current.provider || 'deepseek'),
+                apiUrl: val('aiApiUrl', current.apiUrl || AI_API_URL).trim(),
+                model: val('aiModel', current.model || 'deepseek-chat').trim(),
+                apiKey: val('aiApiKey', current.apiKey || AI_API_KEY).trim(),
+                temperature: Number(val('aiTemperature', current.temperature || 0)),
+                maxTokens: parseInt(val('aiMaxTokens', current.maxTokens || 1800), 10) || 1800
+            };
+            localStorage.setItem('aiSettings', JSON.stringify(settings));
+            if (showAlert) setAISettingsStatus('Ustawienia AI zapisane.', 'success');
+            return settings;
+        }
+
+        function updateAIProviderPreset() {
+            const providerEl = document.getElementById('aiProvider');
+            if (!providerEl) return;
+            const provider = providerEl.value;
+            const preset = AI_PROVIDER_PRESETS[provider] || AI_PROVIDER_PRESETS.deepseek;
+            const apiUrlEl = document.getElementById('aiApiUrl');
+            const modelEl = document.getElementById('aiModel');
+            if (apiUrlEl) apiUrlEl.value = preset.apiUrl;
+            if (modelEl) modelEl.value = preset.model;
+            setAISettingsStatus('Wybrano preset: ' + preset.name + '. Wpisz właściwy klucz API i zapisz ustawienia.', 'info');
+        }
+
+        function resetAISettingsToDefault() {
+            localStorage.removeItem('aiSettings');
+            loadAISettings();
+            setAISettingsStatus('Przywrócono domyślne ustawienia DeepSeek.', 'success');
+        }
+
+        function buildAIHeaders(settings) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (settings.apiKey) headers.Authorization = 'Bearer ' + settings.apiKey;
+            if (settings.provider === 'openrouter') {
+                headers['HTTP-Referer'] = location.origin || 'file://local';
+                headers['X-Title'] = 'Program Warsztatowy';
+            }
+            return headers;
+        }
+
+        function getWorkshopAISystemPrompt() {
+            return `Jesteś asystentem mechanika samochodowego. Z podanego tekstu wyodrębnij szczegółowe dane klienta, pojazdu, pozycje naprawcze z priorytetami oraz uwagi techniczne.
+
+WAŻNE ZASADY:
+1. Zwróć TYLKO poprawny JSON bez dodatkowego tekstu.
+2. Wyciągnij wszystkie dostępne dane klienta: imię/firma, telefon, email, adres.
+3. Wyciągnij szczegóły pojazdu: marka, model, rok, rejestracja, VIN, przebieg, moc, pojemność, kod silnika, kolor, skrzynia biegów.
+4. Wszystkie inne informacje o pojeździe, uszkodzeniach, wyposażeniu i stanie technicznym umieść w technicalNotes.
+5. Jeśli nie masz pewności, nie zmyślaj. Brakujące pola zostaw jako pusty string, null albo 0.
+6. Ocen priorytet każdej naprawy: PILNE, ZALECANE albo OPCJONALNE.
+7. Jeśli brak ceny, ustaw 0. Jeśli brak ilości, ustaw 1.
+8. Jeśli tekst opisuje problem bez ceny, utwórz pozycję typu Diagnostyka / Sprawdzenie usterki z ceną 0.
+
+Format odpowiedzi JSON:
+{
+  "client": { "name": "", "phone": "", "email": "", "address": "" },
+  "vehicle": {
+    "registration": "", "brand": "", "model": "", "year": null, "vin": "",
+    "mileage": null, "engineCapacity": "", "power": null, "engineCode": "",
+    "color": "", "transmission": ""
+  },
+  "items": [
+    { "name": "", "quantity": 1, "price": 0, "notes": "", "priority": "ZALECANE" }
+  ],
+  "technicalNotes": ""
+}`;
+        }
+
+        function extractAIMessage(data) {
+            if (data && data.choices && data.choices[0] && data.choices[0].message) return (data.choices[0].message.content || '').trim();
+            if (data && data.choices && data.choices[0] && data.choices[0].text) return (data.choices[0].text || '').trim();
+            if (data && data.message && data.message.content) return String(data.message.content).trim();
+            if (data && data.content) return String(data.content).trim();
+            return '';
+        }
+
+        function parseAIJson(aiResponse) {
+            let cleanJson = String(aiResponse || '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            if (!cleanJson.startsWith('{')) {
+                const first = cleanJson.indexOf('{');
+                const last = cleanJson.lastIndexOf('}');
+                if (first !== -1 && last !== -1 && last > first) cleanJson = cleanJson.slice(first, last + 1);
+            }
+            return JSON.parse(cleanJson);
+        }
+
+        async function testAIConnection() {
+            const settings = saveAISettings(false);
+            if (!settings.enabled) { setAISettingsStatus('AI jest wyłączone w ustawieniach.', 'error'); return; }
+            if (!settings.apiUrl || !settings.model || !settings.apiKey) { setAISettingsStatus('Brakuje adresu API, modelu albo klucza.', 'error'); return; }
+            setAISettingsStatus('Sprawdzam połączenie z AI...', 'info');
+            try {
+                const response = await fetch(settings.apiUrl, {
+                    method: 'POST',
+                    headers: buildAIHeaders(settings),
+                    body: JSON.stringify({
+                        model: settings.model,
+                        messages: [
+                            { role: 'system', content: 'Odpowiedz jednym słowem: OK' },
+                            { role: 'user', content: 'test' }
+                        ],
+                        temperature: 0,
+                        max_tokens: 20
+                    })
+                });
+                const raw = await response.text();
+                if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + raw.slice(0, 250));
+                setAISettingsStatus('Połączenie AI działa. Odpowiedź otrzymana.', 'success');
+            } catch(e) {
+                setAISettingsStatus('Błąd połączenia AI: ' + (e && e.message ? e.message : e), 'error');
+            }
+        }
 
         // Funkcja otwierająca modal AI
         function showAIModal() {
@@ -5401,6 +5634,7 @@ Przykład:
             aiExtractedPositions = [];
             aiExtractedClient = {};
             aiExtractedVehicle = {};
+            aiExtractedTechnicalNotes = '';
             
             document.getElementById('aiModal').style.display = 'block';
         }
@@ -5437,152 +5671,127 @@ Przykład:
                 return;
             }
 
-            showAIStatus('🤖 Analizuję tekst... To może potrwać kilka sekund.', 'loading');
+            const settings = getAISettings();
+            if (!settings.enabled) {
+                showAIStatus('❌ AI jest wyłączone w ustawieniach.', 'error');
+                return;
+            }
+            if (!settings.apiUrl || !settings.model || !settings.apiKey) {
+                showAIStatus('❌ Brakuje konfiguracji AI. Wejdź w Ustawienia → Ustawienia sztucznej inteligencji i wpisz adres API, model oraz klucz.', 'error');
+                return;
+            }
+
+            showAIStatus('🤖 Analizuję tekst przez ' + (AI_PROVIDER_PRESETS[settings.provider]?.name || settings.provider || 'AI') + '... To może potrwać kilka sekund.', 'loading');
 
             try {
-                const response = await fetch(AI_API_URL, {
+                const payload = {
+                    model: settings.model,
+                    messages: [{
+                        role: 'system',
+                        content: getWorkshopAISystemPrompt()
+                    }, {
+                        role: 'user',
+                        content: inputText
+                    }],
+                    temperature: Number(settings.temperature || 0),
+                    max_tokens: parseInt(settings.maxTokens || 1800, 10)
+                };
+
+                const response = await fetch(settings.apiUrl, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + AI_API_KEY,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        model: 'deepseek-chat',
-                        messages: [{
-                            role: 'system',
-                            content: `Jesteś asystentem mechanika samochodowego. Z podanego tekstu wyodrębnij szczegółowe dane klienta, pojazdu, pozycje naprawcze z priorytetami oraz uwagi techniczne.
-
-WAŻNE ZASADY:
-1. Zwróć TYLKO poprawny JSON bez dodatkowego tekstu
-2. Wyciągnij wszystkie dostępne dane - imię, telefon, adres, email klienta
-3. Wyciągnij szczegóły pojazdu - markę, model, rok, rejestrację, VIN, przebieg, moc, pojemność, kolor, skrzynię biegów
-PRZYKŁADY ROZPOZNAWANIA:
-- "ma automat" → transmission: "automatyczna"  
-- "skrzynia automatyczna" → transmission: "automatyczna"
-- "manual" → transmission: "manualna"
-- "6-biegowa manualna" → transmission: "6-biegowa manualna"
-- "CVT" → transmission: "CVT"
-- "czerwone auto" → color: "czerwony"
-4. WAŻNE: Wszystkie inne informacje o pojeździe (np. uszkodzenia, stan techniczny, wyposażenie) umieść w technicalNotes
-5. ZASADA FALLBACK: Wszelkie informacje które nie pasują do standardowych pól JSON, automatycznie wrzuć do technicalNotes
-6. Ocen priorytet każdej naprawy: "PILNE" (bezpieczeństwo), "ZALECANE" (konserwacja), "OPCJONALNE" (komfort) 
-6. Wyodrębnij uwagi techniczne, zalecenia, dodatkowe usterki do sprawdzenia
-7. Jeśli brak ceny, ustaw 0. Jeśli brak ilości, ustaw 1
-
-Format odpowiedzi (TYLKO JSON):
-{
-  "client": {
-    "name": "imię nazwisko lub firma",
-    "phone": "numer telefonu",
-    "email": "email (jeśli jest)",
-    "address": "adres klienta"
-  },
-  "vehicle": {
-    "registration": "numer rejestracyjny", 
-    "brand": "marka pojazdu",
-    "model": "model pojazdu",
-    "year": rok_produkcji_jako_liczba,
-    "vin": "numer VIN",
-    "mileage": przebieg_jako_liczba,
-    "engineCapacity": "pojemność silnika (np. 2.0 TDI)",
-    "power": moc_w_km_jako_liczba,
-    "engineCode": "kod silnika",
-    "color": "kolor pojazdu",
-    "transmission": "skrzynia biegów: automatyczna/automat/manualna/manual/sekwencja/CVT/DSG/tiptronic"
-  },
-  "items": [
-    {
-      "name": "nazwa części/usługi",
-      "quantity": liczba_całkowita,
-      "price": liczba_dziesiętna,
-      "notes": "krótkie uwagi do pozycji",
-      "priority": "PILNE/ZALECANE/OPCJONALNE"
-    }
-  ],
-  "technicalNotes": "szczegółowe uwagi techniczne, zalecenia, dodatkowe usterki do sprawdzenia w przyszłości, uszkodzenia pojazdu, stan techniczny, wyposażenie, wszystkie inne informacje które nie pasują do standardowych pól"
-}
-
-PRIORYTETY - automatyczna ocena:
-- PILNE: hamulce, układ kierowniczy, opony, zawieszenie, światła, bezpieczeństwo
-- ZALECANE: oleje, filtry, płyny, klocki >50%, rozrząd, konserwacja  
-- OPCJONALNE: klimatyzacja, radio, tapicerka, kosmetyka, komfort
-
-PRZYKŁADY WYODRĘBNIANIA:
-- "140 KM" → power: 140
-- "2.0 diesel", "dwulitrowy" → engineCapacity: "2.0 TDI"
-- "150000 km", "przebieg 150 tys" → mileage: 150000
-- "Warszawa ul. Długa 5" → address: "Warszawa ul. Długa 5"
-- "sprawdź amortyzatory", "zalecana wymiana" → technicalNotes`
-                        }, {
-                            role: 'user',
-                            content: inputText
-                        }],
-                        temperature: 0,
-                        max_tokens: 1500
-                    })
+                    headers: buildAIHeaders(settings),
+                    body: JSON.stringify(payload)
                 });
 
+                const rawResponse = await response.text();
                 if (!response.ok) {
-                    throw new Error(`Błąd API: ${response.status} ${response.statusText}`);
+                    throw new Error('Błąd API: HTTP ' + response.status + ' ' + response.statusText + ' - ' + rawResponse.slice(0, 300));
                 }
 
-                const data = await response.json();
-                const aiResponse = data.choices[0].message.content.trim();
+                let data;
+                try {
+                    data = JSON.parse(rawResponse);
+                } catch(e) {
+                    throw new Error('API zwróciło odpowiedź, której nie da się odczytać jako JSON');
+                }
+
+                const aiResponse = extractAIMessage(data);
+                if (!aiResponse) {
+                    throw new Error('AI nie zwróciło treści odpowiedzi');
+                }
                 
-                // Spróbuj sparsować JSON
                 let parsedData;
                 try {
-                    // Usuń ewentualne znaczniki markdown
-                    const cleanJson = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                    parsedData = JSON.parse(cleanJson);
+                    parsedData = parseAIJson(aiResponse);
                 } catch (parseError) {
-                    throw new Error('AI zwróciło niepoprawny format danych');
+                    console.error('Surowa odpowiedź AI:', aiResponse);
+                    throw new Error('AI zwróciło niepoprawny format danych. Spróbuj ponownie albo zmień model.');
                 }
 
-                if (!parsedData.items || !Array.isArray(parsedData.items)) {
-                    throw new Error('AI nie zwróciło listy pozycji');
+                if (!parsedData || typeof parsedData !== 'object') {
+                    throw new Error('AI zwróciło pusty wynik');
                 }
 
-                // Zapisz wszystkie wyodrębnione dane
-                aiExtractedPositions = parsedData.items || [];
-                aiExtractedClient = parsedData.client || {};
-                aiExtractedVehicle = parsedData.vehicle || {};
-                const technicalNotes = parsedData.technicalNotes || '';
+                // Normalizacja danych z AI - toleruj brakujące pola zamiast przerywać pracę.
+                aiExtractedPositions = Array.isArray(parsedData.items) ? parsedData.items : [];
+                aiExtractedPositions = aiExtractedPositions.map(function(item){
+                    item = item || {};
+                    return {
+                        name: String(item.name || '').trim(),
+                        quantity: parseFloat(item.quantity) || 1,
+                        price: parseFloat(String(item.price || 0).replace(',', '.')) || 0,
+                        notes: String(item.notes || '').trim(),
+                        priority: normalizeAIPriority(item.priority || '')
+                    };
+                }).filter(function(item){ return item.name; });
+
+                aiExtractedClient = parsedData.client && typeof parsedData.client === 'object' ? parsedData.client : {};
+                aiExtractedVehicle = parsedData.vehicle && typeof parsedData.vehicle === 'object' ? parsedData.vehicle : {};
+                aiExtractedTechnicalNotes = String(parsedData.technicalNotes || '').trim();
+
+                // Nie gub danych typu kolor/skrzynia - jeśli nie ma osobnych pól w dokumencie, trafią do uwag.
+                const extraVehicleNotes = [];
+                if (aiExtractedVehicle.color) extraVehicleNotes.push('Kolor: ' + aiExtractedVehicle.color);
+                if (aiExtractedVehicle.transmission) extraVehicleNotes.push('Skrzynia biegów: ' + aiExtractedVehicle.transmission);
+                if (extraVehicleNotes.length) {
+                    aiExtractedTechnicalNotes = [aiExtractedTechnicalNotes, extraVehicleNotes.join('; ')].filter(Boolean).join('\n');
+                }
                 
-                displayAIResults(technicalNotes);
+                displayAIResults(aiExtractedTechnicalNotes);
                 
-                let message = '✅ Analiza zakończona pomyślnie! ';
+                let message = '✅ Analiza zakończona. ';
                 let foundItems = [];
                 if (aiExtractedPositions.length > 0) foundItems.push(aiExtractedPositions.length + ' pozycji');
-                if (aiExtractedClient.name) foundItems.push('dane klienta');
-                if (aiExtractedVehicle.registration || aiExtractedVehicle.brand) foundItems.push('dane pojazdu');
-                if (technicalNotes) foundItems.push('uwagi techniczne');
-                
-                if (foundItems.length > 0) {
-                    message += 'Znaleziono: ' + foundItems.join(', ');
-                }
-                
-                showAIStatus(message, 'success');
+                if (aiExtractedClient.name || aiExtractedClient.phone) foundItems.push('dane klienta');
+                if (aiExtractedVehicle.registration || aiExtractedVehicle.vin || aiExtractedVehicle.brand) foundItems.push('dane pojazdu');
+                if (aiExtractedTechnicalNotes) foundItems.push('uwagi techniczne');
+                message += foundItems.length ? 'Znaleziono: ' + foundItems.join(', ') : 'Nie znaleziono konkretnych danych - popraw tekst i spróbuj ponownie.';
+                showAIStatus(message, foundItems.length ? 'success' : 'error');
 
             } catch (error) {
                 console.error('Błąd AI:', error);
-                showAIStatus('❌ Błąd: ' + error.message + '. Sprawdź połączenie internetowe lub spróbuj ponownie.', 'error');
+                showAIStatus('❌ Błąd: ' + (error && error.message ? error.message : error) + '. Sprawdź ustawienia AI, klucz, model i połączenie internetowe.', 'error');
             }
         }
 
         // Funkcja wyświetlająca wyniki analizy AI
         function displayAIResults(technicalNotes = '') {
+            document.getElementById('aiResults').style.display = 'block';
+            document.getElementById('aiExtractedItems').innerHTML = '';
+
             // Wyświetl dane klienta
-            if (aiExtractedClient.name || aiExtractedClient.phone) {
+            if (aiExtractedClient.name || aiExtractedClient.phone || aiExtractedClient.email || aiExtractedClient.address) {
                 document.getElementById('aiClientName').value = aiExtractedClient.name || '';
                 document.getElementById('aiClientPhone').value = aiExtractedClient.phone || '';
                 document.getElementById('aiClientEmail').value = aiExtractedClient.email || '';
                 document.getElementById('aiClientAddress').value = aiExtractedClient.address || '';
                 document.getElementById('aiClientData').style.display = 'block';
+            } else {
+                document.getElementById('aiClientData').style.display = 'none';
             }
             
             // Wyświetl dane pojazdu
-            if (aiExtractedVehicle.registration || aiExtractedVehicle.brand || aiExtractedVehicle.model) {
+            if (aiExtractedVehicle.registration || aiExtractedVehicle.vin || aiExtractedVehicle.brand || aiExtractedVehicle.model) {
                 document.getElementById('aiVehicleRegistration').value = aiExtractedVehicle.registration || '';
                 document.getElementById('aiVehicleBrand').value = aiExtractedVehicle.brand || '';
                 document.getElementById('aiVehicleModel').value = aiExtractedVehicle.model || '';
@@ -5593,16 +5802,22 @@ PRZYKŁADY WYODRĘBNIANIA:
                 document.getElementById('aiVehiclePower').value = aiExtractedVehicle.power || '';
                 document.getElementById('aiVehicleEngineCode').value = aiExtractedVehicle.engineCode || '';
                 document.getElementById('aiVehicleData').style.display = 'block';
+            } else {
+                document.getElementById('aiVehicleData').style.display = 'none';
             }
             
             // Wyświetl uwagi techniczne
             if (technicalNotes) {
                 document.getElementById('aiNotesText').value = technicalNotes;
                 document.getElementById('aiTechnicalNotes').style.display = 'block';
+            } else {
+                document.getElementById('aiNotesText').value = '';
+                document.getElementById('aiTechnicalNotes').style.display = 'none';
             }
             
             // Wyświetl pozycje z priorytetami
             if (aiExtractedPositions.length === 0) {
+                document.getElementById('aiExtractedItems').innerHTML = '<div style="padding:12px; background:#fff3cd; border:1px solid #ffeeba; border-radius:4px;">AI nie zwróciło pozycji dokumentu. Możesz mimo to utworzyć dokument - program doda pozycję „Diagnostyka / sprawdzenie usterki” z ceną 0 zł, jeśli są uwagi, klient albo pojazd.</div>';
                 return;
             }
 
@@ -5611,12 +5826,11 @@ PRZYKŁADY WYODRĘBNIANIA:
             html += '<tbody>';
 
             aiExtractedPositions.forEach((item, index) => {
-                const priorityClass = getPriorityClass(item.priority);
                 html += `<tr>
                     <td><input type="text" value="${escapeHtml(item.name || '')}" onchange="updateAIItem(${index}, 'name', this.value)" style="width: 100%;"></td>
-                    <td><input type="number" value="${item.quantity || 1}" onchange="updateAIItem(${index}, 'quantity', this.value)" style="width: 60px;"></td>
+                    <td><input type="number" value="${item.quantity || 1}" step="0.01" onchange="updateAIItem(${index}, 'quantity', this.value)" style="width: 70px;"></td>
                     <td><input type="number" value="${item.price || 0}" step="0.01" onchange="updateAIItem(${index}, 'price', this.value)" style="width: 80px;"></td>
-                    <td><select onchange="updateAIItem(${index}, 'priority', this.value)" style="width: 100px;">
+                    <td><select onchange="updateAIItem(${index}, 'priority', this.value)" style="width: 120px;">
                         <option value="" ${!item.priority ? 'selected' : ''}>--</option>
                         <option value="PILNE" ${item.priority === 'PILNE' ? 'selected' : ''}>🚨 PILNE</option>
                         <option value="ZALECANE" ${item.priority === 'ZALECANE' ? 'selected' : ''}>🔧 ZALECANE</option>
@@ -5631,7 +5845,6 @@ PRZYKŁADY WYODRĘBNIANIA:
             html += `<p style="margin-top: 15px; font-weight: bold;">Suma: ${calculateAITotal().toFixed(2)} zł</p>`;
 
             document.getElementById('aiExtractedItems').innerHTML = html;
-            document.getElementById('aiResults').style.display = 'block';
         }
 
         // Funkcja zwracająca klasę CSS dla priorytetu
@@ -5648,7 +5861,7 @@ PRZYKŁADY WYODRĘBNIANIA:
         function updateAIItem(index, field, value) {
             if (aiExtractedPositions[index]) {
                 if (field === 'quantity') {
-                    aiExtractedPositions[index][field] = parseInt(value) || 1;
+                    aiExtractedPositions[index][field] = parseFloat(value) || 1;
                 } else if (field === 'price') {
                     aiExtractedPositions[index][field] = parseFloat(value) || 0;
                 } else {
@@ -5666,7 +5879,7 @@ PRZYKŁADY WYODRĘBNIANIA:
         function removeAIItem(index) {
             if (confirm('Usunąć tę pozycję?')) {
                 aiExtractedPositions.splice(index, 1);
-                displayAIResults();
+                displayAIResults(aiExtractedTechnicalNotes);
             }
         }
 
@@ -5677,159 +5890,285 @@ PRZYKŁADY WYODRĘBNIANIA:
             }, 0);
         }
 
+        function normalizeAIPriority(priorityText) {
+            const raw = String(priorityText || '').toUpperCase().trim();
+            if (!raw) return '';
+            if (raw.includes('PILNE') || raw.includes('URGENT') || raw.includes('NATYCHMIAST') || raw.includes('AWARIA') || raw.includes('BEZPIECZE')) return 'PILNE';
+            if (raw.includes('OPCJONAL') || raw.includes('OPTION') || raw.includes('MOŻNA') || raw.includes('MOZNA') || raw.includes('PÓŹNIEJ') || raw.includes('POZNIEJ')) return 'OPCJONALNE';
+            if (raw.includes('ZALEC') || raw.includes('REKOMEND') || raw.includes('WARTO') || raw.includes('PLAN')) return 'ZALECANE';
+            return raw;
+        }
+
+        function cleanAIString(value) {
+            return String(value || '').trim();
+        }
+
+        function normalizeAIRegistration(value) {
+            return cleanAIString(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
+        function normalizeAIVin(value) {
+            return cleanAIString(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
+        function parseAIInteger(value) {
+            if (value === null || value === undefined || value === '') return null;
+            const n = parseInt(String(value).replace(/[^0-9]/g, ''), 10);
+            return isNaN(n) ? null : n;
+        }
+
+        function hasUsefulAIData(clientData, vehicleData, notesText) {
+            return !!(
+                (clientData && (clientData.name || clientData.phone || clientData.email || clientData.address)) ||
+                (vehicleData && (vehicleData.registration || vehicleData.vin || vehicleData.brand || vehicleData.model)) ||
+                cleanAIString(notesText)
+            );
+        }
+
+        function getAIFieldValue(id, fallback) {
+            const el = document.getElementById(id);
+            const val = el ? cleanAIString(el.value) : '';
+            return val || cleanAIString(fallback);
+        }
+
+        function upsertAIClient(clientData) {
+            clientData = clientData || {};
+            const name = normalizeClientName(clientData.name || '');
+            const phone = cleanAIString(clientData.phone || '');
+            const email = cleanAIString(clientData.email || '');
+            const address = cleanAIString(clientData.address || '');
+            if (!name && !phone && !email) return null;
+
+            let idx = -1;
+            const nameLower = name.toLowerCase();
+            const phoneClean = phone.replace(/\s+/g, '');
+            const emailLower = email.toLowerCase();
+            (clients || []).some(function(c, i){
+                if (!c) return false;
+                const cName = cleanAIString(c.name).toLowerCase();
+                const cPhone = cleanAIString(c.phone).replace(/\s+/g, '');
+                const cEmail = cleanAIString(c.email).toLowerCase();
+                if ((nameLower && cName === nameLower) || (phoneClean && cPhone === phoneClean) || (emailLower && cEmail === emailLower)) {
+                    idx = i;
+                    return true;
+                }
+                return false;
+            });
+
+            if (idx === -1) {
+                const created = { name: name || phone || email, phone: phone, email: email };
+                if (address) created.address = address;
+                clients.push(created);
+                return created;
+            }
+
+            const existing = clients[idx];
+            if (name && !existing.name) existing.name = name;
+            if (phone && !existing.phone) existing.phone = phone;
+            if (email && !existing.email) existing.email = email;
+            if (address && !existing.address) existing.address = address;
+            return existing;
+        }
+
+        function findAIVehicle(vehicleData) {
+            vehicleData = vehicleData || {};
+            const reg = normalizeAIRegistration(vehicleData.registration || '');
+            const vin = normalizeAIVin(vehicleData.vin || '');
+            let found = null;
+            (vehicles || []).some(function(v){
+                if (!v) return false;
+                const vReg = normalizeAIRegistration(v.registration || '');
+                const vVin = normalizeAIVin(v.vin || '');
+                if ((reg && vReg === reg) || (vin && vVin === vin)) {
+                    found = v;
+                    return true;
+                }
+                return false;
+            });
+            return found;
+        }
+
+        function upsertAIVehicle(vehicleData, clientData) {
+            vehicleData = vehicleData || {};
+            clientData = clientData || {};
+            const reg = normalizeAIRegistration(vehicleData.registration || '');
+            const vin = normalizeAIVin(vehicleData.vin || '');
+            const brand = cleanAIString(vehicleData.brand || '').toUpperCase();
+            const model = cleanAIString(vehicleData.model || '').toUpperCase();
+            if (!reg && !vin && !brand && !model) return null;
+
+            let vehicle = findAIVehicle(vehicleData);
+            const mileage = parseAIInteger(vehicleData.mileage);
+            const today = new Date().toISOString().slice(0,10);
+
+            if (!vehicle) {
+                vehicle = {
+                    registration: reg,
+                    vin: vin || null,
+                    brand: brand,
+                    model: model,
+                    year: parseAIInteger(vehicleData.year),
+                    engineCode: cleanAIString(vehicleData.engineCode || '') || null,
+                    capacity: cleanAIString(vehicleData.engineCapacity || '') || null,
+                    power: cleanAIString(vehicleData.power || '') || null,
+                    fuel: null,
+                    weight: null,
+                    owner: normalizeClientName(clientData.name || '') || null,
+                    ownerAddress: cleanAIString(clientData.address || '') || null,
+                    mileage: mileage,
+                    mileageHistory: []
+                };
+                if (mileage) vehicle.mileageHistory.push({ km: mileage, date: today, note: 'AI import' });
+                vehicles.push(vehicle);
+                return vehicle;
+            }
+
+            if (reg && !vehicle.registration) vehicle.registration = reg;
+            if (vin && !vehicle.vin) vehicle.vin = vin;
+            if (brand && !vehicle.brand) vehicle.brand = brand;
+            if (model && !vehicle.model) vehicle.model = model;
+            const year = parseAIInteger(vehicleData.year);
+            if (year && !vehicle.year) vehicle.year = year;
+            const engineCode = cleanAIString(vehicleData.engineCode || '');
+            if (engineCode && !vehicle.engineCode) vehicle.engineCode = engineCode;
+            const capacity = cleanAIString(vehicleData.engineCapacity || '');
+            if (capacity && !vehicle.capacity) vehicle.capacity = capacity;
+            const power = cleanAIString(vehicleData.power || '');
+            if (power && !vehicle.power) vehicle.power = power;
+            const owner = normalizeClientName(clientData.name || '');
+            if (owner && !vehicle.owner) vehicle.owner = owner;
+            const ownerAddress = cleanAIString(clientData.address || '');
+            if (ownerAddress && !vehicle.ownerAddress) vehicle.ownerAddress = ownerAddress;
+            if (mileage && (!vehicle.mileage || mileage > Number(vehicle.mileage))) {
+                vehicle.mileage = mileage;
+                if (!Array.isArray(vehicle.mileageHistory)) vehicle.mileageHistory = [];
+                const duplicateMileage = vehicle.mileageHistory.some(function(m){ return Number(m && m.km) === mileage; });
+                if (!duplicateMileage) vehicle.mileageHistory.push({ km: mileage, date: today, note: 'AI import' });
+            }
+            return vehicle;
+        }
+
+        function formatAIVehicleForDocument(vehicle, vehicleData) {
+            vehicle = vehicle || {};
+            vehicleData = vehicleData || {};
+            const brand = cleanAIString(vehicle.brand || vehicleData.brand || '').toUpperCase();
+            const model = cleanAIString(vehicle.model || vehicleData.model || '').toUpperCase();
+            const reg = cleanAIString(vehicle.registration || vehicleData.registration || '').toUpperCase();
+            const vin = cleanAIString(vehicle.vin || vehicleData.vin || '').toUpperCase();
+            let text = [brand, model].filter(Boolean).join(' ').trim();
+            if (reg) text += (text ? ' ' : '') + '(' + reg + ')';
+            if (!reg && vin) text += (text ? ' ' : '') + '(VIN: ' + vin + ')';
+            return text || reg || vin;
+        }
+
+        function ensurePriorityOption(selectEl, priorityValue) {
+            if (!selectEl || !priorityValue) return;
+            const exists = Array.prototype.some.call(selectEl.options, function(opt){ return opt.value === priorityValue; });
+            if (!exists) {
+                const opt = document.createElement('option');
+                opt.value = priorityValue;
+                opt.textContent = priorityValue;
+                selectEl.appendChild(opt);
+            }
+        }
+
         // Funkcja tworząca dokument z pozycji AI
         function createDocumentFromAI() {
-            if (aiExtractedPositions.length === 0) {
-                alert('Brak pozycji do utworzenia dokumentu!');
+            const docType = document.getElementById('aiDocumentType').value;
+            const positionsToAdd = JSON.parse(JSON.stringify(aiExtractedPositions || []));
+            const clientToAdd = JSON.parse(JSON.stringify(aiExtractedClient || {}));
+            const vehicleToAdd = JSON.parse(JSON.stringify(aiExtractedVehicle || {}));
+
+            clientToAdd.name = getAIFieldValue('aiClientName', clientToAdd.name);
+            clientToAdd.phone = getAIFieldValue('aiClientPhone', clientToAdd.phone);
+            clientToAdd.email = getAIFieldValue('aiClientEmail', clientToAdd.email);
+            clientToAdd.address = getAIFieldValue('aiClientAddress', clientToAdd.address);
+            vehicleToAdd.registration = getAIFieldValue('aiVehicleRegistration', vehicleToAdd.registration);
+            vehicleToAdd.brand = getAIFieldValue('aiVehicleBrand', vehicleToAdd.brand);
+            vehicleToAdd.model = getAIFieldValue('aiVehicleModel', vehicleToAdd.model);
+            vehicleToAdd.year = getAIFieldValue('aiVehicleYear', vehicleToAdd.year);
+            vehicleToAdd.vin = getAIFieldValue('aiVehicleVin', vehicleToAdd.vin);
+            vehicleToAdd.mileage = getAIFieldValue('aiVehicleMileage', vehicleToAdd.mileage);
+            vehicleToAdd.engineCapacity = getAIFieldValue('aiVehicleEngineCapacity', vehicleToAdd.engineCapacity);
+            vehicleToAdd.power = getAIFieldValue('aiVehiclePower', vehicleToAdd.power);
+            vehicleToAdd.engineCode = getAIFieldValue('aiVehicleEngineCode', vehicleToAdd.engineCode);
+            const technicalNotesToAdd = getAIFieldValue('aiNotesText', aiExtractedTechnicalNotes);
+
+            if (positionsToAdd.length === 0 && hasUsefulAIData(clientToAdd, vehicleToAdd, technicalNotesToAdd)) {
+                positionsToAdd.push({
+                    name: 'Diagnostyka / sprawdzenie usterki',
+                    quantity: 1,
+                    price: 0,
+                    notes: technicalNotesToAdd || 'Pozycja dodana automatycznie, bo AI nie podało osobnych pozycji.',
+                    priority: 'ZALECANE'
+                });
+            }
+
+            if (positionsToAdd.length === 0) {
+                alert('Brak danych do utworzenia dokumentu. AI nie znalazło pozycji, klienta, pojazdu ani uwag.');
                 return;
             }
 
-            const docType = document.getElementById('aiDocumentType').value;
-            
-            // WAŻNE: Skopiuj wszystkie dane PRZED zamknięciem modalu (closeModal czyści dane)
-            const positionsToAdd = JSON.parse(JSON.stringify(aiExtractedPositions));
-            const clientToAdd = JSON.parse(JSON.stringify(aiExtractedClient));
-            const vehicleToAdd = JSON.parse(JSON.stringify(aiExtractedVehicle));
-            const itemCount = positionsToAdd.length;
-            
-            // Pobierz zmodyfikowane dane z formularza
-            clientToAdd.name = document.getElementById('aiClientName').value || clientToAdd.name || '';
-            clientToAdd.phone = document.getElementById('aiClientPhone').value || clientToAdd.phone || '';
-            clientToAdd.email = document.getElementById('aiClientEmail').value || clientToAdd.email || '';
-            clientToAdd.address = document.getElementById('aiClientAddress').value || clientToAdd.address || '';
-            
-            vehicleToAdd.registration = document.getElementById('aiVehicleRegistration').value || vehicleToAdd.registration || '';
-            vehicleToAdd.brand = document.getElementById('aiVehicleBrand').value || vehicleToAdd.brand || '';
-            vehicleToAdd.model = document.getElementById('aiVehicleModel').value || vehicleToAdd.model || '';
-            vehicleToAdd.year = document.getElementById('aiVehicleYear').value || vehicleToAdd.year || '';
-            vehicleToAdd.vin = document.getElementById('aiVehicleVin').value || vehicleToAdd.vin || '';
-            vehicleToAdd.mileage = document.getElementById('aiVehicleMileage').value || vehicleToAdd.mileage || '';
-            vehicleToAdd.engineCapacity = document.getElementById('aiVehicleEngineCapacity').value || vehicleToAdd.engineCapacity || '';
-            vehicleToAdd.power = document.getElementById('aiVehiclePower').value || vehicleToAdd.power || '';
-            vehicleToAdd.engineCode = document.getElementById('aiVehicleEngineCode').value || vehicleToAdd.engineCode || '';
-            
-            const technicalNotesToAdd = document.getElementById('aiNotesText').value || '';
-            
-            // Zamknij modal AI
+            const savedClient = upsertAIClient(clientToAdd);
+            const savedVehicle = upsertAIVehicle(vehicleToAdd, clientToAdd);
+            saveData();
+            try { displayClients(); } catch(e) {}
+            try { displayVehicles(); } catch(e) {}
+
             closeModal('aiModal');
-            
-            // Otwórz modal nowego dokumentu z wypełnionymi pozycjami
             showNewDocumentModal(docType);
-            
-            // Poczekaj na załadowanie modalu i wypełnij wszystkie dane
-            setTimeout(() => {
-                // Wypełnij dane klienta
-                if (clientToAdd.name) {
-                    const clientField = document.getElementById('documentClient');
-                    if (clientField) {
-                        let clientText = clientToAdd.name;
-                        if (clientToAdd.phone) clientText += ', tel: ' + clientToAdd.phone;
-                        if (clientToAdd.address) clientText += ', ' + clientToAdd.address;
-                        clientField.value = clientText;
-                    }
+
+            setTimeout(function() {
+                const clientField = document.getElementById('documentClient');
+                if (clientField && (savedClient || clientToAdd.name || clientToAdd.phone || clientToAdd.email)) {
+                    let clientText = (savedClient && savedClient.name) || clientToAdd.name || '';
+                    if (clientToAdd.phone && !clientText.includes(clientToAdd.phone)) clientText += (clientText ? ', ' : '') + 'tel: ' + clientToAdd.phone;
+                    if (clientToAdd.email && !clientText.includes(clientToAdd.email)) clientText += (clientText ? ', ' : '') + clientToAdd.email;
+                    if (clientToAdd.address && !clientText.includes(clientToAdd.address)) clientText += (clientText ? ', ' : '') + clientToAdd.address;
+                    clientField.value = clientText;
                 }
-                
-                // Wypełnij dane pojazdu - dodaj do bazy jeśli nie istnieje
-                if (vehicleToAdd.brand || vehicleToAdd.registration) {
-                    const vehicleField = document.getElementById('documentVehicle');
-                    if (vehicleField) {
-                        // Szukaj pojazdu w bazie po rejestracji
-                        var existingVehicle = null;
-                        if (vehicleToAdd.registration) {
-                            var regUpper = vehicleToAdd.registration.toUpperCase().trim();
-                            (vehicles || []).forEach(function(v) {
-                                if (v && v.registration && v.registration.toUpperCase().trim() === regUpper) {
-                                    existingVehicle = v;
-                                }
-                            });
-                        }
-                        
-                        if (!existingVehicle && (vehicleToAdd.brand || vehicleToAdd.registration)) {
-                            // Dodaj pojazd do bazy automatycznie
-                            var newVehicle = {
-                                registration: (vehicleToAdd.registration || '').toUpperCase().trim(),
-                                brand: (vehicleToAdd.brand || '').toUpperCase().trim(),
-                                model: (vehicleToAdd.model || '').toUpperCase().trim(),
-                                year: vehicleToAdd.year ? parseInt(vehicleToAdd.year) : null,
-                                vin: (vehicleToAdd.vin || '').toUpperCase().trim() || null,
-                                capacity: vehicleToAdd.engineCapacity || null,
-                                power: vehicleToAdd.power || null,
-                                fuel: null,
-                                weight: null,
-                                owner: clientToAdd.name || null,
-                                ownerAddress: clientToAdd.address || null,
-                                engineCode: vehicleToAdd.engineCode || null,
-                                mileageHistory: []
-                            };
-                            if (vehicleToAdd.mileage) {
-                                newVehicle.mileageHistory.push({
-                                    km: parseInt(vehicleToAdd.mileage),
-                                    date: new Date().toISOString().slice(0,10),
-                                    note: 'AI import'
-                                });
-                            }
-                            vehicles.push(newVehicle);
-                            saveData();
-                            displayVehicles();
-                            existingVehicle = newVehicle;
-                            console.log('AI: Dodano pojazd do bazy:', newVehicle.brand, newVehicle.model, newVehicle.registration);
-                        }
-                        
-                        // Ustaw pole w formacie zgodnym z bazą: "MARKA MODEL (REJESTRACJA)"
-                        if (existingVehicle) {
-                            vehicleField.value = existingVehicle.brand + ' ' + existingVehicle.model + ' (' + existingVehicle.registration + ')';
-                        } else {
-                            vehicleField.value = (vehicleToAdd.brand || '') + ' ' + (vehicleToAdd.model || '');
-                        }
-                    }
+
+                const vehicleField = document.getElementById('documentVehicle');
+                if (vehicleField && (savedVehicle || vehicleToAdd.brand || vehicleToAdd.registration || vehicleToAdd.vin)) {
+                    vehicleField.value = formatAIVehicleForDocument(savedVehicle, vehicleToAdd);
                 }
-                
-                // Wypełnij uwagi techniczne do dokumentu
-                if (technicalNotesToAdd) {
-                    const notesField = document.getElementById('documentNotes');
-                    if (notesField) {
-                        notesField.value = technicalNotesToAdd;
-                    }
-                }
-                
-                // Dodaj pozycje z priorytetami
+
+                const notesField = document.getElementById('documentNotes');
+                if (notesField && technicalNotesToAdd) notesField.value = technicalNotesToAdd;
+
                 let addedCount = 0;
-                positionsToAdd.forEach(item => {
-                    if (item.name && item.name.trim()) {
-                        // Wypełnij formularz pozycji
-                        document.getElementById('positionName').value = item.name.trim();
-                        document.getElementById('positionQuantity').value = item.quantity || 1;
-                        document.getElementById('positionPrice').value = item.price || 0;
-                        
-                        // Uwagi do pozycji (bez priorytetu - priorytet idzie do osobnego pola)
-                        document.getElementById('positionNotes').value = item.notes || '';
-                        
-                        // Ustaw priorytet w dedykowanym select (jeśli dostępny)
-                        const prioritySelect = document.getElementById('positionPriority');
-                        if (prioritySelect && item.priority) {
-                            const priorityValue = findPriorityValue(item.priority);
-                            console.log('Ustawianie priorytetu:', item.priority, '-> wartość:', priorityValue);
-                            if (priorityValue) {
-                                prioritySelect.value = priorityValue;
-                                console.log('Ustanowiono priorytet w select:', prioritySelect.value);
-                            }
-                        }
-                        
-                        // Dodaj pozycję (symuluj kliknięcie przycisku)
-                        addPosition();
-                        addedCount++;
+                positionsToAdd.forEach(function(item) {
+                    if (!item || !cleanAIString(item.name)) return;
+                    const normalizedPriority = normalizeAIPriority(item.priority || '');
+                    const priorityValue = findPriorityValue(normalizedPriority) || normalizedPriority;
+                    const positionNotesParts = [];
+                    if (item.notes) positionNotesParts.push(cleanAIString(item.notes));
+                    if (normalizedPriority && !priorityValue) positionNotesParts.push('Priorytet: ' + normalizedPriority);
+
+                    document.getElementById('positionName').value = cleanAIString(item.name);
+                    document.getElementById('positionQuantity').value = parseFloat(item.quantity) || 1;
+                    document.getElementById('positionPrice').value = parseFloat(String(item.price || 0).replace(',', '.')) || 0;
+                    document.getElementById('positionNotes').value = positionNotesParts.join('\n');
+
+                    const prioritySelect = document.getElementById('positionPriority');
+                    if (prioritySelect && priorityValue) {
+                        ensurePriorityOption(prioritySelect, priorityValue);
+                        prioritySelect.value = priorityValue;
                     }
+
+                    addPosition();
+                    addedCount++;
                 });
-                
+
                 if (addedCount > 0) {
-                    let message = '✅ Dokument utworzony z ' + addedCount + ' pozycjami!';
-                    if (clientToAdd.name) message += '\n📞 Dane klienta wypełnione';
-                    if (vehicleToAdd.brand || vehicleToAdd.registration) message += '\n🚗 Dane pojazdu wypełnione';
+                    let message = '✅ Dokument utworzony z ' + addedCount + ' pozycjami.';
+                    if (savedClient || clientToAdd.name) message += '\nDane klienta wpisane/uzupełnione.';
+                    if (savedVehicle || vehicleToAdd.brand || vehicleToAdd.registration || vehicleToAdd.vin) message += '\nDane pojazdu wpisane/uzupełnione.';
                     alert(message);
                 } else {
-                    alert('⚠️ Nie udało się dodać pozycji. Spróbuj ponownie.');
+                    alert('⚠️ Dokument został otwarty, ale nie udało się dodać pozycji. Sprawdź dane z AI.');
                 }
-            }, 400); // Zwiększyłem czas oczekiwania dla pewności
+            }, 400);
         }
 
         // Funkcja zwracająca tekst priorytetu
@@ -5842,25 +6181,22 @@ PRZYKŁADY WYODRĘBNIANIA:
             }
         }
         
-        // Pomocnicza funkcja do znajdowania wartości priorytetu w select
+        // Pomocnicza funkcja do znajdowania wartości priorytetu w select.
+        // Zwraca wartość zgodną z istniejącym słownikiem, a gdy jej nie ma - bezpieczny tekst priorytetu.
         function findPriorityValue(priorityText) {
-            if (!priorityText) return '';
-            
-            // Szukaj w liście priorytetów
-            for (let priority of priorities) {
-                const priorityName = priority.name || '';
-                const priorityDesc = priority.description || '';
-                
-                // Dopasuj po nazwie lub opisie
-                if (priorityName.includes(priorityText) || 
-                    priorityDesc.includes(priorityText) ||
-                    priorityText.includes('PILNE') && priorityName.includes('PILNE') ||
-                    priorityText.includes('ZALECANE') && priorityName.includes('ZALECANE') ||
-                    priorityText.includes('OPCJONALNE') && priorityName.includes('OPCJONALNE')) {
-                    return priorityDesc || priorityName; // Zwróć opis jako wartość
+            const normalized = normalizeAIPriority(priorityText);
+            if (!normalized) return '';
+            for (let priority of (priorities || [])) {
+                const priorityName = String(priority.name || '').toUpperCase();
+                const priorityDesc = String(priority.description || '').toUpperCase();
+                if (priorityName === normalized || priorityDesc === normalized || priorityName.includes(normalized) || priorityDesc.includes(normalized)) {
+                    return priority.description || priority.name;
                 }
+                if (normalized === 'PILNE' && (priorityName.includes('PILNE') || priorityName.includes('URGENT'))) return priority.description || priority.name;
+                if (normalized === 'ZALECANE' && (priorityName.includes('ZALEC') || priorityName.includes('REKOM'))) return priority.description || priority.name;
+                if (normalized === 'OPCJONALNE' && (priorityName.includes('OPCJON') || priorityName.includes('OPTION'))) return priority.description || priority.name;
             }
-            return '';
+            return normalized;
         }
 
         
@@ -8571,5 +8907,6 @@ P.3:P LPG`;
 
         // === KONIEC AZTEC/QR SCANNER v7 ===
     </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
