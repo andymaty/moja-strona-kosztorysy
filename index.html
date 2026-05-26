@@ -1618,12 +1618,12 @@ Przykład:
                     <h3>Klient i pojazd</h3>
                     <div class="form-group">
                         <label>Klient:</label>
-                        <input type="text" id="documentClient" placeholder="Zacznij pisać..." oninput="suggestClients(this.value, 'documentClientSuggestions')">
+                        <input type="text" id="documentClient" placeholder="Zacznij pisać..." autocomplete="off" autocapitalize="off" spellcheck="false" data-reset-guard="1" oninput="markDocumentClientTouched(); suggestClients(this.value, 'documentClientSuggestions')">
                         <div id="documentClientSuggestions" class="suggestions"></div>
                     </div>
                     <div class="form-group">
                         <label>Pojazd:</label>
-                        <input type="text" id="documentVehicle" placeholder="Zacznij pisać..." oninput="suggestVehicles(this.value, 'documentVehicleSuggestions')">
+                        <input type="text" id="documentVehicle" placeholder="Zacznij pisać..." autocomplete="off" autocapitalize="off" spellcheck="false" data-reset-guard="1" oninput="markDocumentVehicleTouched(); suggestVehicles(this.value, 'documentVehicleSuggestions')">
                         <div id="documentVehicleSuggestions" class="suggestions"></div>
                     </div>
                     <div class="form-group">
@@ -2680,6 +2680,47 @@ Przykład:
         }
 
         // Funkcje dokumentów
+        // Ochrona przed przenoszeniem danych z poprzedniego dokumentu/autouzupełnianiem przeglądarki.
+        // Nowy dokument ma mieć pustego klienta i pojazd, dopóki użytkownik albo AI świadomie ich nie wpisze.
+        let documentClientTouched = false;
+        let documentVehicleTouched = false;
+
+        function markDocumentClientTouched() { documentClientTouched = true; }
+        function markDocumentVehicleTouched() { documentVehicleTouched = true; }
+        function markDocumentClientProgrammatic() { documentClientTouched = true; }
+        function markDocumentVehicleProgrammatic() { documentVehicleTouched = true; }
+
+        function resetDocumentTransientState() {
+            documentClientTouched = false;
+            documentVehicleTouched = false;
+            window.tempPositions = [];
+            hideAllSuggestions();
+        }
+
+        function clearInputHard(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.value = '';
+            el.defaultValue = '';
+            el.setAttribute('autocomplete', 'off');
+            el.setAttribute('autocapitalize', 'off');
+            el.setAttribute('spellcheck', 'false');
+            // Zmienna nazwa pola utrudnia przeglądarce wstrzelenie starej wartości z pamięci formularzy.
+            el.setAttribute('name', id + '_' + Date.now());
+        }
+
+        function getGuardedDocumentClient() {
+            const el = document.getElementById('documentClient');
+            const value = el ? el.value.trim() : '';
+            return documentClientTouched ? value : '';
+        }
+
+        function getGuardedDocumentVehicle() {
+            const el = document.getElementById('documentVehicle');
+            const value = el ? el.value.trim() : '';
+            return documentVehicleTouched ? value : '';
+        }
+
         function generateDocNumber(type){
             const map = { faktura:'FV', paragon:'PAR', kosztorys:'KOS' };
             const prefix = map[type] || 'DOC';
@@ -2702,6 +2743,7 @@ Przykład:
         }
         function showNewDocumentModal(type) {
             currentEditingDocument = null;
+            resetDocumentTransientState();
             document.getElementById('documentModalTitle').textContent = 'Nowy ' + type;
             document.getElementById('documentType').value = type;
             
@@ -2712,8 +2754,8 @@ Przykład:
             document.getElementById('documentIssuer').value = document.getElementById('companyName').value;
             document.getElementById('documentAddress').value = document.getElementById('companyAddress').value;
             document.getElementById('documentNIP').value = document.getElementById('companyNIP').value;
-            document.getElementById('documentClient').value = '';
-            document.getElementById('documentVehicle').value = '';
+            clearInputHard('documentClient');
+            clearInputHard('documentVehicle');
             document.getElementById('documentNotes').value = '';
             const pmEl = document.getElementById('paymentMethod'); if (pmEl) pmEl.value = '';
             const paEl = document.getElementById('paidAmount'); if (paEl) paEl.value = '';
@@ -2737,8 +2779,10 @@ Przykład:
             document.getElementById('documentIssuer').value = doc.issuer || '';
             document.getElementById('documentAddress').value = doc.address || '';
             document.getElementById('documentNIP').value = doc.nip || '';
-            document.getElementById('documentClient').value = doc.client;
-            document.getElementById('documentVehicle').value = doc.vehicle;
+            document.getElementById('documentClient').value = doc.client || '';
+            document.getElementById('documentVehicle').value = doc.vehicle || '';
+            documentClientTouched = !!doc.client;
+            documentVehicleTouched = !!doc.vehicle;
             document.getElementById('documentNotes').value = doc.notes || '';
             const pmEl = document.getElementById('paymentMethod'); if (pmEl) pmEl.value = doc.paymentMethod || '';
             const paEl = document.getElementById('paidAmount'); if (paEl) paEl.value = (doc.paidAmount != null ? doc.paidAmount : '');
@@ -2912,8 +2956,8 @@ Przykład:
             const issuer = document.getElementById('documentIssuer').value.trim();
             const address = document.getElementById('documentAddress').value.trim();
             const nip = document.getElementById('documentNIP').value.trim();
-            const client = document.getElementById('documentClient').value.trim();
-            const vehicle = document.getElementById('documentVehicle').value.trim();
+            const client = getGuardedDocumentClient();
+            const vehicle = getGuardedDocumentVehicle();
             const notes = document.getElementById('documentNotes').value.trim();
             const paymentMethodEl = document.getElementById('paymentMethod');
             const paymentMethod = paymentMethodEl ? paymentMethodEl.value.trim() : '';
@@ -2984,6 +3028,7 @@ Przykład:
             try { displayServices(); } catch(e){}
             displayDocuments();
             closeModal('documentModal');
+            resetDocumentTransientState();
         }
 
         function deleteDocument(index) {
@@ -3080,8 +3125,8 @@ Przykład:
                 const issuer = document.getElementById('documentIssuer').value.trim();
                 const address = document.getElementById('documentAddress').value.trim();
                 const nip = document.getElementById('documentNIP').value.trim();
-                const client = document.getElementById('documentClient').value.trim();
-                const vehicle = document.getElementById('documentVehicle').value.trim();
+                const client = getGuardedDocumentClient();
+                const vehicle = getGuardedDocumentVehicle();
                 const notes = document.getElementById('documentNotes').value.trim();
                 const positions = window.tempPositions || [];
                 const total = positions.reduce(function(sum, pos){ return sum + (pos.quantity * pos.price); }, 0);
@@ -3167,17 +3212,32 @@ Przykład:
 
             const positionsRows = doc.positions.map(function(pos, idx){ return '\n                <tr>\n                    <td>'+(idx+1)+'. '+escapeHtml(pos.name)+(pos.notes ? '<div class="pos-notes">' + escapeHtml(pos.notes) + '</div>' : '')+'</td>\n                    <td>'+pos.quantity+' szt</td>\n                    <td class="price-col">'+pos.price.toFixed(2)+cs+'</td>\n                    <td class="price-col">'+(pos.quantity * pos.price).toFixed(2)+cs+'</td>\n                    <td>'+escapeHtml(pos.priority||'')+'</td>\n                </tr>\n            '; }).join('');
 
-            // Znajdź pełne dane pojazdu z bazy na podstawie doc.vehicle
+            // Znajdź pełne dane pojazdu z bazy na podstawie doc.vehicle.
+            // WAŻNE: nie wolno dopasowywać po zwykłym includes(registration), bo tekst typu
+            // „Yamaha 321” błędnie łapał pojazd z rejestracją „321” i drukował starego właściciela.
             var vehicleDetailsHtml = '';
             if (doc.vehicle) {
-                // doc.vehicle to "MARKA MODEL (REJESTRACJA)" - szukaj w bazie
                 var matchedVehicle = null;
-                (vehicles || []).forEach(function(v) {
-                    if (!v) return;
-                    var vStr = v.brand + ' ' + v.model + ' (' + v.registration + ')';
-                    if (vStr === doc.vehicle || doc.vehicle.includes(v.registration)) {
-                        matchedVehicle = v;
-                    }
+                var docVehicleText = String(doc.vehicle || '').trim();
+                var docVehicleNorm = normalizeSearchString(docVehicleText);
+                var parenMatch = docVehicleText.match(/\(([^)]+)\)\s*$/);
+                var explicitToken = parenMatch ? String(parenMatch[1] || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+                var docVinLike = docVehicleText.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+                (vehicles || []).some(function(v) {
+                    if (!v) return false;
+                    var reg = String(v.registration || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    var vin = String(v.vin || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    var vStr = ((v.brand || '') + ' ' + (v.model || '') + ' (' + (v.registration || '') + ')').trim();
+                    var vStrNorm = normalizeSearchString(vStr);
+
+                    // 1. Pełny tekst wybrany z podpowiedzi, np. FIAT DUCATO (XYZ123)
+                    if (vStrNorm && docVehicleNorm === vStrNorm) { matchedVehicle = v; return true; }
+                    // 2. Rejestracja/VIN podana jawnie w nawiasie na końcu pola
+                    if (explicitToken && ((reg && explicitToken === reg) || (vin && explicitToken === vin))) { matchedVehicle = v; return true; }
+                    // 3. Sam VIN jako całe pole
+                    if (vin && docVinLike.length === 17 && docVinLike === vin) { matchedVehicle = v; return true; }
+                    return false;
                 });
                 
                 if (matchedVehicle) {
@@ -4161,6 +4221,7 @@ Przykład:
                 div.onclick = function() {
                     const inputId = containerId.replace('Suggestions', '');
                     document.getElementById(inputId).value = client.name;
+                    if (inputId === 'documentClient') markDocumentClientProgrammatic();
                     container.innerHTML = '';
                 };
                 container.appendChild(div);
@@ -4206,6 +4267,7 @@ Przykład:
                 div.onclick = function() {
                     const inputId = containerId.replace('Suggestions', '');
                     document.getElementById(inputId).value = vehicle.brand + ' ' + vehicle.model + ' (' + vehicle.registration + ')';
+                    if (inputId === 'documentVehicle') markDocumentVehicleProgrammatic();
                     container.innerHTML = '';
                 };
                 container.appendChild(div);
@@ -6126,11 +6188,13 @@ Format odpowiedzi JSON:
                     if (clientToAdd.email && !clientText.includes(clientToAdd.email)) clientText += (clientText ? ', ' : '') + clientToAdd.email;
                     if (clientToAdd.address && !clientText.includes(clientToAdd.address)) clientText += (clientText ? ', ' : '') + clientToAdd.address;
                     clientField.value = clientText;
+                    markDocumentClientProgrammatic();
                 }
 
                 const vehicleField = document.getElementById('documentVehicle');
                 if (vehicleField && (savedVehicle || vehicleToAdd.brand || vehicleToAdd.registration || vehicleToAdd.vin)) {
                     vehicleField.value = formatAIVehicleForDocument(savedVehicle, vehicleToAdd);
+                    markDocumentVehicleProgrammatic();
                 }
 
                 const notesField = document.getElementById('documentNotes');
@@ -8907,6 +8971,6 @@ P.3:P LPG`;
 
         // === KONIEC AZTEC/QR SCANNER v7 ===
     </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
