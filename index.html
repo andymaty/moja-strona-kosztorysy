@@ -162,15 +162,62 @@
         
         .modal-content {
             background-color: white;
-            margin: 5% auto;
+            margin: 2vh auto;
             padding: 20px;
             border-radius: 8px;
-            width: 90%;
-            max-width: 800px;
-            max-height: 80vh;
+            width: min(90%, 800px);
+            max-width: 98vw;
+            max-height: 96vh;
             overflow-y: auto;
+            /* Okno można rozciągać za uchwyt w prawym dolnym rogu; rozmiar jest zapamiętywany */
+            resize: both;
         }
-        
+
+        /* Szerszy modal dokumentu – tabela pozycji i dwie kolumny potrzebują miejsca */
+        #documentModal .modal-content {
+            width: min(96%, 1100px);
+        }
+
+        /* Tryb pełnoekranowy okna (przycisk ⛶ obok krzyżyka) */
+        .modal-content.modal-maximized {
+            width: 98vw !important;
+            height: 96vh !important;
+            max-width: none !important;
+            max-height: 96vh !important;
+            margin: 1vh auto !important;
+        }
+
+        .modal-maximize {
+            color: #aaa;
+            float: right;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 3px 14px 0 0;
+            line-height: 24px;
+            user-select: none;
+        }
+
+        .modal-maximize:hover {
+            color: black;
+        }
+
+        /* Pasek akcji przyklejony do dołu modala – Zapisz/Anuluj zawsze widoczne bez przewijania */
+        .modal-actions {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            margin: 15px -20px -20px -20px;
+            padding: 12px 20px;
+            border-top: 1px solid #ddd;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.06);
+            z-index: 10;
+        }
+
+        .modal-actions .btn {
+            margin-bottom: 0;
+        }
+
         .close {
             color: #aaa;
             float: right;
@@ -1240,8 +1287,10 @@
                 <label>Email:</label>
                 <input type="email" id="clientEmail">
             </div>
-            <button class="btn" onclick="saveClient()">Zapisz</button>
-            <button class="btn btn-danger" onclick="closeModal('clientModal')">Anuluj</button>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveClient()">Zapisz</button>
+                <button class="btn btn-danger" onclick="closeModal('clientModal')">Anuluj</button>
+            </div>
         </div>
     </div>
 
@@ -1338,8 +1387,10 @@
             </div>
             </div> <!-- Koniec manualVehicleEntry -->
             
-            <button class="btn" onclick="saveVehicle()">Zapisz</button>
-            <button class="btn btn-danger" onclick="closeModal('vehicleModal')">Anuluj</button>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveVehicle()">Zapisz</button>
+                <button class="btn btn-danger" onclick="closeModal('vehicleModal')">Anuluj</button>
+            </div>
         </div>
     </div>
     
@@ -1565,8 +1616,10 @@ Przykład:
                     <option value="zakonczone">Zakończone</option>
                 </select>
             </div>
-            <button class="btn" onclick="saveOrder()">Zapisz</button>
-            <button class="btn btn-danger" onclick="closeModal('orderModal')">Anuluj</button>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveOrder()">Zapisz</button>
+                <button class="btn btn-danger" onclick="closeModal('orderModal')">Anuluj</button>
+            </div>
         </div>
     </div>
 
@@ -1681,9 +1734,11 @@ Przykład:
                 Suma: <span id="documentTotal">0,00 zł</span>
             </div>
             
-            <button class="btn" onclick="saveDocument()">Zapisz</button>
-            <button class="btn btn-primary" onclick="printDocument()">Drukuj</button>
-            <button class="btn btn-danger" onclick="closeModal('documentModal')">Zamknij</button>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveDocument()">Zapisz</button>
+                <button class="btn btn-primary" onclick="printDocument()">Drukuj</button>
+                <button class="btn btn-danger" onclick="closeModal('documentModal')">Zamknij</button>
+            </div>
         </div>
     </div>
 
@@ -1697,8 +1752,10 @@ Przykład:
                 <label>Podaj aktualny przebieg (km):</label>
                 <input type="number" id="newMileage" min="0">
             </div>
-            <button class="btn" onclick="saveMileage()">OK</button>
-            <button class="btn btn-danger" onclick="closeModal('mileageModal')">Anuluj</button>
+            <div class="modal-actions">
+                <button class="btn" onclick="saveMileage()">OK</button>
+                <button class="btn btn-danger" onclick="closeModal('mileageModal')">Anuluj</button>
+            </div>
         </div>
     </div>
 
@@ -2243,6 +2300,9 @@ Przykład:
             
             // Inicjalizacja ukrywania podpowiedzi
             setupSuggestionsHiding();
+
+            // Rozciągane okna modalne + zapamiętywanie rozmiaru i maksymalizacji
+            try { initResizableModals(); } catch(e) { console.error('Błąd inicjalizacji okien:', e); }
             
             // Inicjalizacja UI statystyk
             try { initStatsUI(); } catch(e) {}
@@ -2358,6 +2418,84 @@ Przykład:
             }
         }
 
+        // === ROZCIĄGANE I MAKSYMALIZOWANE OKNA MODALNE ===
+        // Każde okno można rozciągnąć za uchwyt w prawym dolnym rogu (rozmiar jest
+        // zapamiętywany w localStorage osobno dla każdego okna) albo zmaksymalizować
+        // przyciskiem ⛶ obok krzyżyka (stan też jest zapamiętywany).
+        function applySavedModalSize(modalId) {
+            const modal = document.getElementById(modalId);
+            const content = modal ? modal.querySelector('.modal-content') : null;
+            if (!content) return;
+            try {
+                if (localStorage.getItem('modalMax_' + modalId) === 'true') {
+                    content.classList.add('modal-maximized');
+                }
+                const saved = JSON.parse(localStorage.getItem('modalSize_' + modalId) || 'null');
+                if (saved && saved.w > 200 && saved.h > 150) {
+                    content.style.width = Math.min(saved.w, Math.round(window.innerWidth * 0.98)) + 'px';
+                    content.style.height = Math.min(saved.h, Math.round(window.innerHeight * 0.96)) + 'px';
+                }
+            } catch (e) { /* uszkodzony zapis rozmiaru – ignoruj */ }
+        }
+
+        function toggleModalMaximize(modalId) {
+            const modal = document.getElementById(modalId);
+            const content = modal ? modal.querySelector('.modal-content') : null;
+            if (!content) return;
+            const maximized = !content.classList.contains('modal-maximized');
+            content.classList.toggle('modal-maximized', maximized);
+            localStorage.setItem('modalMax_' + modalId, maximized ? 'true' : 'false');
+        }
+
+        function initResizableModals() {
+            if (window._modalsResizableInit) return;
+            window._modalsResizableInit = true;
+            document.querySelectorAll('.modal').forEach(function(modal) {
+                if (!modal.id) return;
+                const content = modal.querySelector('.modal-content');
+                if (!content) return;
+                const modalId = modal.id;
+
+                // Usuń inline'owy max-width (np. asystent ma 800px), by dało się poszerzyć
+                if (content.style.maxWidth) content.style.maxWidth = '';
+
+                // Przycisk maksymalizacji obok krzyżyka zamykania
+                const maxBtn = document.createElement('span');
+                maxBtn.className = 'modal-maximize';
+                maxBtn.title = 'Maksymalizuj / przywróć rozmiar okna';
+                maxBtn.textContent = '⛶';
+                maxBtn.onclick = function() { toggleModalMaximize(modalId); };
+                const closeBtn = content.querySelector('.close');
+                if (closeBtn) {
+                    closeBtn.insertAdjacentElement('afterend', maxBtn);
+                } else {
+                    content.insertBefore(maxBtn, content.firstChild);
+                }
+
+                applySavedModalSize(modalId);
+
+                // Zapamiętuj rozmiar po ręcznym rozciągnięciu uchwytem.
+                // Rozciągnięcie ustawia inline style.width/height – naturalne zmiany
+                // wysokości treści tego nie robią, więc ich nie zapisujemy.
+                if (typeof ResizeObserver !== 'undefined') {
+                    let saveTimer = null;
+                    new ResizeObserver(function() {
+                        if (modal.style.display !== 'block') return;
+                        if (content.classList.contains('modal-maximized')) return;
+                        if (!content.style.width && !content.style.height) return;
+                        if (saveTimer) clearTimeout(saveTimer);
+                        saveTimer = setTimeout(function() {
+                            const w = Math.round(content.offsetWidth);
+                            const h = Math.round(content.offsetHeight);
+                            if (w > 200 && h > 150) {
+                                localStorage.setItem('modalSize_' + modalId, JSON.stringify({ w: w, h: h }));
+                            }
+                        }, 400);
+                    }).observe(content);
+                }
+            });
+        }
+
         // Funkcje klientów
         function showAddClientModal() {
             currentEditingClient = null;
@@ -2372,9 +2510,9 @@ Przykład:
             currentEditingClient = index;
             const client = clients[index];
             document.getElementById('clientModalTitle').textContent = 'Edytuj klienta';
-            document.getElementById('clientName').value = client.name;
-            document.getElementById('clientPhone').value = client.phone;
-            document.getElementById('clientEmail').value = client.email;
+            document.getElementById('clientName').value = client.name || '';
+            document.getElementById('clientPhone').value = client.phone || '';
+            document.getElementById('clientEmail').value = client.email || '';
             document.getElementById('clientModal').style.display = 'block';
         }
 
@@ -2391,7 +2529,8 @@ Przykład:
             const client = { name: name, phone: phone, email: email };
             
             if (currentEditingClient !== null) {
-                clients[currentEditingClient] = client;
+                // Scal z istniejącym rekordem, by nie zgubić pól spoza formularza (np. adresu z AI)
+                clients[currentEditingClient] = Object.assign({}, clients[currentEditingClient], client);
             } else {
                 clients.push(client);
             }
@@ -2454,17 +2593,17 @@ Przykład:
             currentEditingVehicle = index;
             const vehicle = vehicles[index];
             document.getElementById('vehicleModalTitle').textContent = 'Edytuj pojazd';
-            document.getElementById('vehicleRegistration').value = vehicle.registration;
+            document.getElementById('vehicleRegistration').value = vehicle.registration || '';
             document.getElementById('vehicleVin').value = vehicle.vin || '';
-            document.getElementById('vehicleBrand').value = vehicle.brand;
-            document.getElementById('vehicleModel').value = vehicle.model;
+            document.getElementById('vehicleBrand').value = vehicle.brand || '';
+            document.getElementById('vehicleModel').value = vehicle.model || '';
             document.getElementById('vehicleYear').value = vehicle.year || '';
             document.getElementById('vehicleEngineCode').value = vehicle.engineCode || '';
             document.getElementById('vehicleCapacity').value = vehicle.capacity || '';
             document.getElementById('vehiclePower').value = vehicle.power || '';
             document.getElementById('vehicleFuel').value = vehicle.fuel || '';
             document.getElementById('vehicleWeight').value = vehicle.weight || '';
-            document.getElementById('vehicleOwner').value = vehicle.owner;
+            document.getElementById('vehicleOwner').value = vehicle.owner || '';
             document.getElementById('vehicleOwnerAddress').value = vehicle.ownerAddress || '';
             document.getElementById('vehicleMileage').value = vehicle.mileage || '';
             document.getElementById('vehicleModal').style.display = 'block';
@@ -2509,8 +2648,17 @@ Przykład:
             
             if (currentEditingVehicle !== null) {
                 // Zachowaj historię przebiegu przy edycji
-                vehicle.mileageHistory = vehicles[currentEditingVehicle].mileageHistory || [];
-                vehicles[currentEditingVehicle] = vehicle;
+                const previousVehicle = vehicles[currentEditingVehicle] || {};
+                vehicle.mileageHistory = previousVehicle.mileageHistory || [];
+                // Jeśli przebieg się zmienił, dopisz wpis do historii
+                if (vehicle.mileage && vehicle.mileage !== previousVehicle.mileage) {
+                    vehicle.mileageHistory.push({
+                        date: new Date().toISOString().split('T')[0],
+                        mileage: vehicle.mileage
+                    });
+                }
+                // Scal z istniejącym rekordem, by nie zgubić pól spoza formularza (np. dane ze skanera)
+                vehicles[currentEditingVehicle] = Object.assign({}, previousVehicle, vehicle);
             } else {
                 // Dodaj początkowy przebieg do historii
                 if (mileage) {
@@ -2621,8 +2769,10 @@ Przykład:
                 return;
             }
             
+            // Zachowaj oryginalną datę przy edycji; dla nowych zleceń ustaw dzisiejszą
+            const existingOrder = (currentEditingOrder !== null) ? orders[currentEditingOrder] : null;
             const order = {
-                date: new Date().toISOString().split('T')[0],
+                date: (existingOrder && existingOrder.date) ? existingOrder.date : new Date().toISOString().split('T')[0],
                 description: description,
                 client: client,
                 vehicle: vehicle,
@@ -2787,14 +2937,9 @@ Przykład:
             const pmEl = document.getElementById('paymentMethod'); if (pmEl) pmEl.value = doc.paymentMethod || '';
             const paEl = document.getElementById('paidAmount'); if (paEl) paEl.value = (doc.paidAmount != null ? doc.paidAmount : '');
             
-            // Załaduj pozycje
-            const positionsTable = document.getElementById('documentPositions');
-            positionsTable.innerHTML = '';
-            
-            doc.positions.forEach(function(position, posIndex){
-                const row = positionsTable.insertRow();
-                row.innerHTML = '\n                    <td>'+escapeHtml(position.name)+(position.notes ? '<div class="pos-notes">' + escapeHtml(position.notes) + '</div>' : '')+'</td>\n                    <td>'+position.quantity+'</td>\n                    <td>'+Number(position.price).toFixed(2)+' zł</td>\n                    <td>'+ (position.quantity * position.price).toFixed(2) +' zł</td>\n                    <td>'+escapeHtml(position.priority||'')+'</td>\n                    <td>\n                        <button class="btn btn-primary" onclick="editPositionInline('+posIndex+')">Edytuj</button>\n                        <button class="btn btn-danger" onclick="removePosition('+posIndex+')">Usuń</button>\n                    </td>\n                ';
-            });
+            // Załaduj pozycje (wspólny renderer utrzymuje spójność indeksów przycisków)
+            if (!Array.isArray(doc.positions)) doc.positions = [];
+            renderPositionsTable();
             
             updateDocumentTotal();
             refreshPrioritySelect();
@@ -2805,6 +2950,23 @@ Przykład:
             if (currentEditingDocument !== null) return documents[currentEditingDocument].positions || [];
             if (!window.tempPositions) window.tempPositions = [];
             return window.tempPositions;
+        }
+
+        // Przerysowuje całą tabelę pozycji dokumentu na podstawie aktualnych danych.
+        // Jedno źródło prawdy dla indeksów przycisków Edytuj/Usuń – częściowe
+        // przenumerowywanie wierszy psuło indeksy przy usuwaniu podczas edycji.
+        function renderPositionsTable() {
+            const tbody = document.getElementById('documentPositions');
+            if (!tbody) return;
+            const positions = getActivePositions();
+            const cs = (typeof getCurrencySuffix === 'function') ? getCurrencySuffix() : ' zł';
+            tbody.innerHTML = '';
+            positions.forEach(function(position, i){
+                const row = tbody.insertRow();
+                const qty = Number(position.quantity) || 0;
+                const price = Number(position.price) || 0;
+                row.innerHTML = '\n                <td>'+escapeHtml(position.name)+(position.notes ? '<div class="pos-notes">' + escapeHtml(position.notes) + '</div>' : '')+'</td>\n                <td>'+qty+'</td>\n                <td>'+price.toFixed(2)+cs+'</td>\n                <td>'+ (qty * price).toFixed(2) +cs+'</td>\n                <td>'+escapeHtml(position.priority||'')+'</td>\n                <td>\n                    <button class="btn btn-primary" onclick="editPositionInline('+i+')">Edytuj</button>\n                    <button class="btn btn-danger" onclick="removePosition('+i+')">Usuń</button>\n                </td>\n            ';
+            });
         }
 
         function updatePosition(index, field, value) {
@@ -2831,12 +2993,8 @@ Przykład:
             if (currentEditingDocument !== null) {
                 saveData();
             }
-            // Odśwież wyświetlanie
-            const row = document.getElementById('documentPositions').rows[index];
-            const positions = getActivePositions();
-            const position = positions[index];
-            const cs = getCurrencySuffix ? getCurrencySuffix() : ' zł';
-            row.innerHTML = '\n                <td>'+escapeHtml(position.name)+(position.notes ? '<div class=\"pos-notes\">' + escapeHtml(position.notes) + '</div>' : '')+'</td>\n                <td>'+position.quantity+'</td>\n                <td>'+Number(position.price).toFixed(2)+cs+'</td>\n                <td>'+ (Number(position.quantity)*Number(position.price)).toFixed(2) +cs+'</td>\n                <td>'+escapeHtml(position.priority||'')+'</td>\n                <td>\n                    <button class=\"btn btn-primary\" onclick=\"editPositionInline('+index+')\">Edytuj</button>\n                    <button class=\"btn btn-danger\" onclick=\"removePosition('+index+')\">Usuń</button>\n                </td>\n            ';
+            // Odśwież wyświetlanie (wspólny renderer)
+            renderPositionsTable();
         }
 
         function editPositionInline(index) {
@@ -2848,11 +3006,8 @@ Przykład:
         }
 
         function cancelPositionEdit(index) {
-            const row = document.getElementById('documentPositions').rows[index];
-            const positions = getActivePositions();
-            const position = positions[index];
-            const cs = getCurrencySuffix ? getCurrencySuffix() : ' zł';
-            row.innerHTML = '\n                <td>'+escapeHtml(position.name)+(position.notes ? '<div class=\"pos-notes\">' + escapeHtml(position.notes) + '</div>' : '')+'</td>\n                <td>'+position.quantity+'</td>\n                <td>'+Number(position.price).toFixed(2)+cs+'</td>\n                <td>'+ (Number(position.quantity) * Number(position.price)).toFixed(2) + cs +'</td>\n                <td>'+escapeHtml(position.priority||'')+'</td>\n                <td>\n                    <button class=\"btn btn-primary\" onclick=\"editPositionInline('+index+')\">Edytuj</button>\n                    <button class=\"btn btn-danger\" onclick=\"removePosition('+index+')\">Usuń</button>\n                </td>\n            ';
+            // Przywróć widok wiersza bez zapisywania zmian (wspólny renderer)
+            renderPositionsTable();
         }
 
         function addPosition() {
@@ -2881,12 +3036,8 @@ Przykład:
                 window.tempPositions.push(position);
             }
             
-            // Dodaj wiersz do tabeli
-            const tbody = document.getElementById('documentPositions');
-            const row = tbody.insertRow();
-            const posIndex = tbody.rows.length - 1;
-            
-            row.innerHTML = '\n                <td>'+escapeHtml(name)+(notes ? '<div class="pos-notes">' + escapeHtml(notes) + '</div>' : '')+'</td>\n                <td>'+quantity+'</td>\n                <td>'+price.toFixed(2)+' zł</td>\n                <td>'+ (quantity * price).toFixed(2) +' zł</td>\n                <td>'+escapeHtml(priority)+'</td>\n                <td>\n                    <button class="btn btn-primary" onclick="editPositionInline('+posIndex+')">Edytuj</button>\n                    <button class="btn btn-danger" onclick="removePosition('+posIndex+')">Usuń</button>\n                </td>\n            ';
+            // Przerysuj tabelę pozycji (wspólny renderer utrzymuje spójność indeksów)
+            renderPositionsTable();
             
             // Wyczyść formularz
             document.getElementById('positionName').value = '';
@@ -2914,16 +3065,9 @@ Przykład:
                     }
                 }
                 
-                // Usuń wiersz z tabeli
-                document.getElementById('documentPositions').deleteRow(index);
-                
-                // Przenumeruj pozostałe wiersze
-                const rows = document.getElementById('documentPositions').rows;
-                for (var i = index; i < rows.length; i++) {
-                    const row = rows[i];
-                    const buttons = row.cells[5];
-                    buttons.innerHTML = '\n                        <button class="btn btn-primary" onclick="editPositionInline('+i+')">Edytuj</button>\n                        <button class="btn btn-danger" onclick="removePosition('+i+')">Usuń</button>\n                    ';
-                }
+                // Przerysuj całą tabelę – proste przenumerowanie przycisków psuło
+                // indeksy wierszy będących akurat w trybie edycji
+                renderPositionsTable();
                 
                 updateDocumentTotal();
             }
@@ -2935,11 +3079,11 @@ Przykład:
             if (currentEditingDocument !== null) {
                 // Edytujemy istniejący dokument
                 const doc = documents[currentEditingDocument];
-                total = doc.positions.reduce(function(sum, pos){ return sum + (pos.quantity * pos.price); }, 0);
+                total = (doc.positions||[]).reduce(function(sum, pos){ return sum + ((Number(pos.quantity)||0) * (Number(pos.price)||0)); }, 0);
             } else {
                 // Nowy dokument - używamy tymczasowych pozycji
                 if (window.tempPositions) {
-                    total = window.tempPositions.reduce(function(sum, pos){ return sum + (pos.quantity * pos.price); }, 0);
+                    total = window.tempPositions.reduce(function(sum, pos){ return sum + ((Number(pos.quantity)||0) * (Number(pos.price)||0)); }, 0);
                 }
             }
             
@@ -2980,7 +3124,7 @@ Przykład:
                 positions = window.tempPositions || [];
             }
             
-            const total = positions.reduce(function(sum, pos){ return sum + (pos.quantity * pos.price); }, 0);
+            const total = positions.reduce(function(sum, pos){ return sum + ((Number(pos.quantity)||0) * (Number(pos.price)||0)); }, 0);
             
             // Opcjonalne ostrzeżenie gdy wpłacono > wartość dokumentu
             if (type !== 'kosztorys' && paidAmount > total) {
@@ -3129,7 +3273,7 @@ Przykład:
                 const vehicle = getGuardedDocumentVehicle();
                 const notes = document.getElementById('documentNotes').value.trim();
                 const positions = window.tempPositions || [];
-                const total = positions.reduce(function(sum, pos){ return sum + (pos.quantity * pos.price); }, 0);
+                const total = positions.reduce(function(sum, pos){ return sum + ((Number(pos.quantity)||0) * (Number(pos.price)||0)); }, 0);
                 const paymentMethodEl = document.getElementById('paymentMethod'); const paymentMethod = paymentMethodEl ? paymentMethodEl.value.trim() : '';
                 const paidAmountEl = document.getElementById('paidAmount'); const paidAmount = paidAmountEl ? (parseFloat(paidAmountEl.value) || 0) : 0;
                 
@@ -3143,7 +3287,9 @@ Przykład:
                     if (number) {
                         const exists = (documents || []).some(function(d){ return d && d.number === number && d.type === type; });
                         if (!exists) {
-                            documents.push(Object.assign({}, doc));
+                            // Głęboka kopia pozycji – płytka kopia współdzieliła tablicę
+                            // z formularzem i dalsza edycja psuła zapisany dokument
+                            documents.push(Object.assign({}, doc, { positions: JSON.parse(JSON.stringify(positions)) }));
                             saveIssuer(issuer);
                             // dopisz klienta i pozycje do słowników
                             ensureFromDocument(doc);
@@ -3159,12 +3305,20 @@ Przykład:
             
             if (!doc) return;
             
-            // Nadpisz wartości płatności z bieżącego formularza (druk bez konieczności zapisu zmian)
+            // Nadpisz wartości płatności z bieżącego formularza (druk bez konieczności zapisu zmian).
+            // Tylko gdy modal dokumentu jest otwarty i dotyczy TEGO dokumentu – inaczej druk
+            // z listy przejmowałby wartości z ostatnio otwieranego formularza.
             try {
-                const pmEl2 = document.getElementById('paymentMethod');
-                if (pmEl2 && pmEl2.value !== '') doc.paymentMethod = pmEl2.value.trim();
-                const paEl2 = document.getElementById('paidAmount');
-                if (paEl2 && paEl2.value !== '') doc.paidAmount = (parseFloat(paEl2.value) || 0);
+                const docModalEl = document.getElementById('documentModal');
+                const docModalOpen = docModalEl && docModalEl.style.display === 'block';
+                const printsCurrentDoc = (index === null || index === undefined) ||
+                    (currentEditingDocument !== null && index === currentEditingDocument);
+                if (docModalOpen && printsCurrentDoc) {
+                    const pmEl2 = document.getElementById('paymentMethod');
+                    if (pmEl2 && pmEl2.value !== '') doc.paymentMethod = pmEl2.value.trim();
+                    const paEl2 = document.getElementById('paidAmount');
+                    if (paEl2 && paEl2.value !== '') doc.paidAmount = (parseFloat(paEl2.value) || 0);
+                }
             } catch(e) { /* ignoruj */ }
             
             const printArea = document.getElementById('printArea');
@@ -3195,12 +3349,12 @@ Przykład:
             const emailVal = document.getElementById('companyEmail').value.trim();
 
             var cs = getCurrencySuffix();
-            const grossTotal = doc.positions.reduce(function(sum, pos){ return sum + (pos.quantity * pos.price); }, 0);
+            const grossTotal = (doc.positions||[]).reduce(function(sum, pos){ return sum + ((Number(pos.quantity)||0) * (Number(pos.price)||0)); }, 0);
             var summaryHtml = '';
             if (!isSimple) {
                 var netSum = 0, vatSum = 0, grossSum = 0;
-                doc.positions.forEach(function(pos){
-                    const gross = (pos.quantity * pos.price);
+                (doc.positions||[]).forEach(function(pos){
+                    const gross = ((Number(pos.quantity)||0) * (Number(pos.price)||0));
                     const net = Math.round((gross / 1.23) * 100) / 100;
                     const vat = Math.round((gross - net) * 100) / 100;
                     netSum += net; vatSum += vat; grossSum += gross;
@@ -3210,7 +3364,7 @@ Przykład:
                 summaryHtml = '\n                    <tr class="total-row">\n                        <td colspan="4"><strong>Suma:</strong></td>\n                        <td class="price-col"><strong>'+grossTotal.toFixed(2)+cs+'</strong></td>\n                    </tr>';
             }
 
-            const positionsRows = doc.positions.map(function(pos, idx){ return '\n                <tr>\n                    <td>'+(idx+1)+'. '+escapeHtml(pos.name)+(pos.notes ? '<div class="pos-notes">' + escapeHtml(pos.notes) + '</div>' : '')+'</td>\n                    <td>'+pos.quantity+' szt</td>\n                    <td class="price-col">'+pos.price.toFixed(2)+cs+'</td>\n                    <td class="price-col">'+(pos.quantity * pos.price).toFixed(2)+cs+'</td>\n                    <td>'+escapeHtml(pos.priority||'')+'</td>\n                </tr>\n            '; }).join('');
+            const positionsRows = (doc.positions||[]).map(function(pos, idx){ return '\n                <tr>\n                    <td>'+(idx+1)+'. '+escapeHtml(pos.name)+(pos.notes ? '<div class="pos-notes">' + escapeHtml(pos.notes) + '</div>' : '')+'</td>\n                    <td>'+pos.quantity+' szt</td>\n                    <td class="price-col">'+(Number(pos.price)||0).toFixed(2)+cs+'</td>\n                    <td class="price-col">'+((Number(pos.quantity)||0) * (Number(pos.price)||0)).toFixed(2)+cs+'</td>\n                    <td>'+escapeHtml(pos.priority||'')+'</td>\n                </tr>\n            '; }).join('');
 
             // Znajdź pełne dane pojazdu z bazy na podstawie doc.vehicle.
             // WAŻNE: nie wolno dopasowywać po zwykłym includes(registration), bo tekst typu
@@ -3348,7 +3502,7 @@ Przykład:
             documents.forEach(function(doc, index){
                 const row = tbody.insertRow();
                 row.setAttribute('data-doc-index', index);
-                row.innerHTML = '\n                    <td>'+escapeHtml(doc.type)+'</td>\n                    <td>'+escapeHtml(doc.number)+'</td>\n                    <td>'+escapeHtml(doc.date)+'</td>\n                    <td>'+escapeHtml(doc.client)+'</td>\n                    <td>'+doc.total.toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-primary" onclick="editDocument('+index+')">Edytuj</button>\n                        <button class="btn" onclick="printDocument('+index+')">Drukuj</button>\n                        <button class="btn btn-danger" onclick="deleteDocument('+index+')">Usuń</button>\n                    </td>\n                ';
+                row.innerHTML = '\n                    <td>'+escapeHtml(doc.type)+'</td>\n                    <td>'+escapeHtml(doc.number)+'</td>\n                    <td>'+escapeHtml(doc.date)+'</td>\n                    <td>'+escapeHtml(doc.client)+'</td>\n                    <td>'+(Number(doc.total)||0).toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-primary" onclick="editDocument('+index+')">Edytuj</button>\n                        <button class="btn" onclick="printDocument('+index+')">Drukuj</button>\n                        <button class="btn btn-danger" onclick="deleteDocument('+index+')">Usuń</button>\n                    </td>\n                ';
             });
 
             updateDocumentYearFilter();
@@ -3687,7 +3841,7 @@ Przykład:
             
             products.forEach(function(product, index){
                 const row = tbody.insertRow();
-                row.innerHTML = '\n                    <td>'+escapeHtml(product.name)+'</td>\n                    <td>'+product.price.toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-danger" onclick="deleteProduct('+index+')">Usuń</button>\n                    </td>\n                ';
+                row.innerHTML = '\n                    <td>'+escapeHtml(product.name)+'</td>\n                    <td>'+(Number(product.price)||0).toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-danger" onclick="deleteProduct('+index+')">Usuń</button>\n                    </td>\n                ';
             });
         }
 
@@ -4163,7 +4317,7 @@ Przykład:
             
             services.forEach(function(service, index){
                 const row = tbody.insertRow();
-                row.innerHTML = '\n                    <td>'+escapeHtml(service.name)+'</td>\n                    <td>'+service.price.toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-danger" onclick="deleteService('+index+')">Usuń</button>\n                    </td>\n                ';
+                row.innerHTML = '\n                    <td>'+escapeHtml(service.name)+'</td>\n                    <td>'+(Number(service.price)||0).toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-danger" onclick="deleteService('+index+')">Usuń</button>\n                    </td>\n                ';
             });
         }
 
@@ -4767,6 +4921,8 @@ Przykład:
                     }
                 };
                 reader.readAsText(file);
+                // Reset inputa, by można było ponownie wybrać ten sam plik
+                document.getElementById('importFile').value = '';
             }
         }
 
@@ -6602,7 +6758,7 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                 messageDiv.innerHTML = `
                     <div style="margin: 15px 0;">
                         <div style="display: inline-block; background: white; border: 1px solid #ddd; padding: 10px 15px; border-radius: 15px 15px 15px 5px; max-width: 70%;">
-                            ${content.replace(/\\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}
+                            ${content.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}
                             <div style="font-size: 10px; margin-top: 5px; color: #6c757d;">🤖 Asystent • ${timestamp}</div>
                         </div>
                     </div>
