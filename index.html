@@ -113,11 +113,20 @@
         .btn-primary {
             background: #007bff;
         }
-        
+
         .btn-primary:hover {
             background: #0056b3;
         }
-        
+
+        /* Przycisk „Kopiuj” – tworzy nowy dokument z istniejącego, oryginał zostaje */
+        .btn-copy {
+            background: #fd7e14;
+        }
+
+        .btn-copy:hover {
+            background: #e8690b;
+        }
+
         .table {
             width: 100%;
             border-collapse: collapse;
@@ -1634,7 +1643,7 @@ Przykład:
                     <h3>Dane dokumentu</h3>
                     <div class="form-group">
                         <label>Typ:</label>
-                        <select id="documentType">
+                        <select id="documentType" onchange="onDocumentTypeChange()">
                             <option value="kosztorys">Kosztorys</option>
                             <option value="paragon">Paragon</option>
                             <option value="faktura">Faktura</option>
@@ -1736,6 +1745,7 @@ Przykład:
             
             <div class="modal-actions">
                 <button class="btn" onclick="saveDocument()">Zapisz</button>
+                <button class="btn btn-copy" id="copyDocumentBtn" style="display:none;" onclick="copyCurrentDocument()" title="Nowy dokument na podstawie tego – oryginał zostaje bez zmian">Kopiuj</button>
                 <button class="btn btn-primary" onclick="printDocument()">Drukuj</button>
                 <button class="btn btn-danger" onclick="closeModal('documentModal')">Zamknij</button>
             </div>
@@ -2915,7 +2925,8 @@ Przykład:
             document.getElementById('documentPositions').innerHTML = '';
             updateDocumentTotal();
             refreshPrioritySelect();
-            
+            setCopyButtonVisible(false);
+
             document.getElementById('documentModal').style.display = 'block';
         }
 
@@ -2943,7 +2954,81 @@ Przykład:
             
             updateDocumentTotal();
             refreshPrioritySelect();
+            setCopyButtonVisible(true);
             document.getElementById('documentModal').style.display = 'block';
+        }
+
+        // === KOPIA DOKUMENTU (kosztorys / paragon / faktura) ===
+        // Stary dokument zostaje nietknięty, a jego zawartość ląduje w NOWYM
+        // dokumencie: dzisiejsza data, świeży numer, pozycje skopiowane co do jednej.
+        // Kopię można potem dowolnie przerobić (skreślić pozycję, dołożyć nową,
+        // zmienić typ np. z kosztorysu na fakturę) – oryginał się nie zmienia.
+        function setCopyButtonVisible(visible) {
+            const btn = document.getElementById('copyDocumentBtn');
+            if (btn) btn.style.display = visible ? '' : 'none';
+        }
+
+        function copyDocument(index) {
+            const src = documents[index];
+            if (!src) return;
+
+            // Kopia jest NOWYM dokumentem – nie edytujemy oryginału
+            currentEditingDocument = null;
+            resetDocumentTransientState();
+
+            const type = src.type || 'kosztorys';
+            document.getElementById('documentModalTitle').textContent =
+                'Kopia dokumentu ' + String(type).toUpperCase() + ' ' + (src.number || '') + ' (oryginał zostaje)';
+            document.getElementById('documentType').value = type;
+            // Świeży numer w serii danego typu – stary numer zostaje przy oryginale
+            document.getElementById('documentNumber').value = generateDocNumber(type);
+            document.getElementById('documentIssuer').value = src.issuer || '';
+            document.getElementById('documentAddress').value = src.address || '';
+            document.getElementById('documentNIP').value = src.nip || '';
+            document.getElementById('documentClient').value = src.client || '';
+            document.getElementById('documentVehicle').value = src.vehicle || '';
+            // Bez tych dwóch znaczników zapis potraktowałby pola jako nieruszane i wyczyścił je
+            documentClientTouched = !!src.client;
+            documentVehicleTouched = !!src.vehicle;
+            document.getElementById('documentNotes').value = src.notes || '';
+            const pmEl = document.getElementById('paymentMethod'); if (pmEl) pmEl.value = src.paymentMethod || '';
+            const paEl = document.getElementById('paidAmount'); if (paEl) paEl.value = (src.paidAmount != null ? src.paidAmount : '');
+
+            // Głęboka kopia pozycji – edycja kopii nie może ruszyć pozycji oryginału
+            window.tempPositions = (src.positions || []).map(function(p){
+                return {
+                    name: (p && p.name) || '',
+                    quantity: Number(p && p.quantity) || 0,
+                    price: Number(p && p.price) || 0,
+                    notes: (p && p.notes) || '',
+                    priority: (p && p.priority) || ''
+                };
+            });
+
+            renderPositionsTable();
+            updateDocumentTotal();
+            refreshPrioritySelect();
+            setCopyButtonVisible(false);
+            document.getElementById('documentModal').style.display = 'block';
+        }
+
+        // „Kopiuj” z otwartego okna dokumentu – to samo, tylko bez wracania do listy
+        function copyCurrentDocument() {
+            if (currentEditingDocument === null) return;
+            if (!confirm('Zrobić kopię tego dokumentu?\n\nOryginał zostanie bez zmian, a Ty będziesz edytować nowy dokument z dzisiejszą datą.\nNiezapisane zmiany w tym oknie nie przejdą do kopii.')) return;
+            copyDocument(currentEditingDocument);
+        }
+
+        // Zmiana typu w NOWYM dokumencie (np. kopia kosztorysu ma być fakturą):
+        // numer nadany automatycznie dostaje prefiks pasujący do nowego typu.
+        // Numer wpisany ręcznie zostaje nietknięty, a dokumentu w edycji nie ruszamy.
+        function onDocumentTypeChange() {
+            if (currentEditingDocument !== null) return;
+            const numEl = document.getElementById('documentNumber');
+            const typeEl = document.getElementById('documentType');
+            if (!numEl || !typeEl) return;
+            if (!/^(FV|PAR|KOS|DOC)\/\d{4}\/\d{2}\/\d{3}$/.test(String(numEl.value).trim())) return;
+            numEl.value = generateDocNumber(typeEl.value);
         }
 
         function getActivePositions(){
@@ -3502,7 +3587,7 @@ Przykład:
             documents.forEach(function(doc, index){
                 const row = tbody.insertRow();
                 row.setAttribute('data-doc-index', index);
-                row.innerHTML = '\n                    <td>'+escapeHtml(doc.type)+'</td>\n                    <td>'+escapeHtml(doc.number)+'</td>\n                    <td>'+escapeHtml(doc.date)+'</td>\n                    <td>'+escapeHtml(doc.client)+'</td>\n                    <td>'+(Number(doc.total)||0).toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-primary" onclick="editDocument('+index+')">Edytuj</button>\n                        <button class="btn" onclick="printDocument('+index+')">Drukuj</button>\n                        <button class="btn btn-danger" onclick="deleteDocument('+index+')">Usuń</button>\n                    </td>\n                ';
+                row.innerHTML = '\n                    <td>'+escapeHtml(doc.type)+'</td>\n                    <td>'+escapeHtml(doc.number)+'</td>\n                    <td>'+escapeHtml(doc.date)+'</td>\n                    <td>'+escapeHtml(doc.client)+'</td>\n                    <td>'+(Number(doc.total)||0).toFixed(2)+' zł</td>\n                    <td>\n                        <button class="btn btn-primary" onclick="editDocument('+index+')">Edytuj</button>\n                        <button class="btn btn-copy" onclick="copyDocument('+index+')" title="Nowy dokument na podstawie tego – oryginał zostaje bez zmian">Kopiuj</button>\n                        <button class="btn" onclick="printDocument('+index+')">Drukuj</button>\n                        <button class="btn btn-danger" onclick="deleteDocument('+index+')">Usuń</button>\n                    </td>\n                ';
             });
 
             updateDocumentYearFilter();
@@ -6820,7 +6905,16 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                 z-index: 10000;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             }
-            
+
+            /* Puste pudełko podpowiedzi ma zerową wysokość, ale nadal rysuje
+               własną ramkę – na ekranie wychodziła z tego szara kreska szerokości
+               pola, przyklejona na sztywno (position: fixed), więc nie przewijała
+               się razem z oknem. Podpowiedzi są „chowane” samym wyczyszczeniem
+               środka (innerHTML=''), dlatego pustego pudełka po prostu nie pokazujemy. */
+            .suggestions:empty {
+                display: none;
+            }
+
             .suggestions div:hover {
                 background-color: #f0f0f0;
             }
