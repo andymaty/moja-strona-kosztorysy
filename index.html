@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Program Warsztatowy v22</title>
+    <title>Program Warsztatowy v24</title>
     <!-- v22 (2026-10-08): poprawki po audycie – opis w pliku CO_POPRAWIONO_v22.md -->
+    <!-- v23 (2026-10-13): wklejanie danych z aplikacji „Skaner Dowodów” – opis w pliku CO_POPRAWIONO_v23.md -->
+    <!-- v24 (2026-10-13): okno „Dane pojazdu”, nowy dokument z pojazdu – opis w pliku CO_POPRAWIONO_v24.md -->
     
     <!-- FontAwesome dla ikon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -845,8 +847,9 @@
         <!-- Sekcja Pojazdy -->
         <div id="vehicles" class="section">
             <h2>Zarządzanie pojazdami</h2>
-            <input type="text" id="vehicleSearch" class="search-box" placeholder="Szukaj pojazdy (rejestracja, marka, model, VIN, kod silnika)..." oninput="filterVehicles()">
+            <input type="text" id="vehicleSearch" class="search-box" placeholder="Szukaj pojazdy (rejestracja, marka, model, VIN, właściciel)..." oninput="filterVehicles()">
             <button class="btn" onclick="showAddVehicleModal()">Dodaj pojazd</button>
+            <span style="margin-left:12px;font-size:12px;color:#666;">Kliknij pojazd na liście, aby zobaczyć i skopiować jego dane albo wystawić dla niego dokument.</span>
             <table class="vehicle-table" id="vehiclesTable">
                 <thead>
                     <tr>
@@ -1289,6 +1292,9 @@
                 <button class="qr-button" onclick="showQRScanner()">
                     <i class="fas fa-qrcode"></i> Skanuj kod Aztec
                 </button>
+                <button class="qr-button" onclick="showDRImport()" style="background:#28a745;">
+                    <i class="fas fa-paste"></i> Wklej dane ze Skanera Dowodów
+                </button>
                 <button class="qr-button secondary" onclick="showManualEntry()">
                     Wpisz ręcznie
                 </button>
@@ -1356,6 +1362,19 @@
                 </div>
             </div>
             <div class="form-group">
+                <label>Rodzaj pojazdu:</label>
+                <input type="text" id="vehicleKind" list="vehicleKindList" placeholder="np. SAMOCHÓD OSOBOWY" autocomplete="off">
+                <datalist id="vehicleKindList">
+                    <option value="SAMOCHÓD OSOBOWY"></option>
+                    <option value="SAMOCHÓD CIĘŻAROWY"></option>
+                    <option value="MOTOCYKL"></option>
+                    <option value="MOTOROWER"></option>
+                    <option value="PRZYCZEPA"></option>
+                    <option value="CIĄGNIK ROLNICZY"></option>
+                    <option value="AUTOBUS"></option>
+                </datalist>
+            </div>
+            <div class="form-group">
                 <label>Właściciel:</label>
                 <input type="text" id="vehicleOwner" placeholder="Zacznij pisać nazwę klienta..." oninput="suggestClients(this.value, 'vehicleOwnerSuggestions')">
                 <div id="vehicleOwnerSuggestions" class="suggestions"></div>
@@ -1377,6 +1396,17 @@
         </div>
     </div>
     
+    <!-- Modal: dane pojazdu (podgląd, kopiowanie, nowy dokument, historia dokumentów) -->
+    <div id="vehicleDetailsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('vehicleDetailsModal')">&times;</span>
+            <div id="vehicleDetailsContent"></div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" onclick="closeModal('vehicleDetailsModal')">Zamknij</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Aztec/QR Scanner v7 -->
     <div id="qrScannerModal" class="modal">
         <div class="modal-content">
@@ -1403,7 +1433,7 @@
                     <i class="fas fa-mobile-alt"></i> Screen carq.pl
                 </button>
                 <button id="tabImport" class="btn" onclick="switchScannerTab('import')" style="flex:1; min-width: 120px; background: #28a745; font-size: 15px; padding: 12px 8px; color: white;">
-                    <i class="fas fa-paste"></i> Import z dowodu
+                    <i class="fas fa-paste"></i> Wklej dane ze skanera
                 </button>
             </div>
 
@@ -1526,25 +1556,27 @@
             <!-- Tab: Import danych z aplikacji Android "Dowody Rejestracyjne Polskie" -->
             <div id="scannerTabImport" style="display: none;">
                 <div style="background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
-                    <strong>📋 Import z aplikacji "Dowody Rejestracyjne Polskie":</strong><br>
-                    1. Na starym telefonie z Androidem otwórz aplikację <strong>Dowody Rejestracyjne</strong><br>
-                    2. Zeskanuj kod Aztec z dowodu rejestracyjnego<br>
-                    3. Kliknij <strong>"Kopiuj do schowka"</strong> w aplikacji<br>
-                    4. Wklej dane poniżej (Ctrl+V lub długie przytrzymanie)
+                    <strong>📋 Dane z aplikacji „Skaner Dowodów”:</strong><br>
+                    1. Zeskanuj dowód w aplikacji <strong>Skaner Dowodów</strong> na telefonie<br>
+                    2. Naciśnij <strong>„Kopiuj wszystko”</strong> albo <strong>„Udostępnij”</strong> (np. wyślij sobie na WhatsApp)<br>
+                    3. Skopiuj całą wiadomość i wklej poniżej (Ctrl+V) – dane odczytają się same<br>
+                    <small>Działa też „Kopiuj surowy tekst kodu” oraz tekst ze starej aplikacji „Dowody Rejestracyjne Polskie”.</small>
                 </div>
                 
                 <div style="padding: 10px;">
                     <h4 style="margin: 0 0 10px;"><i class="fas fa-paste"></i> Wklej skopiowane dane:</h4>
                     <textarea id="drImportTextarea" rows="10" style="width: 100%; font-family: monospace; font-size: 13px; 
                              border: 2px solid #28a745; border-radius: 8px; padding: 10px; resize: vertical;"
-                             placeholder="Wklej tutaj dane skopiowane z aplikacji Android...
+                             placeholder="Wklej tutaj tekst ze Skanera Dowodów...
 
 Przykład:
-- Nr rejestracyjny: DLW VK98
-- Marka pojazdu: CITROEN
-- Model pojazdu: C4 PICASSO
-- VIN: VF7UARHJH45348611
-..."></textarea>
+Pojazd
+Numer rejestracyjny (A): DLW VK98
+Marka (D.1): CITROEN
+Model (D.3): C4 PICASSO
+Numer VIN (E): VF7UARHJH45348611
+..."
+                             onpaste="setTimeout(parseDRImportData, 100)"></textarea>
                     <div style="margin-top: 10px; display: flex; gap: 8px;">
                         <button class="btn" onclick="parseDRImportData()" style="background: #28a745; color: white; flex: 1; font-size: 16px; padding: 12px;">
                             <i class="fas fa-check"></i> Importuj dane
@@ -2898,6 +2930,7 @@ Przykład:
             document.getElementById('vehiclePower').value = '';
             document.getElementById('vehicleFuel').value = '';
             document.getElementById('vehicleWeight').value = '';
+            document.getElementById('vehicleKind').value = '';
             document.getElementById('vehicleOwner').value = '';
             document.getElementById('vehicleOwnerAddress').value = '';
             document.getElementById('vehicleMileage').value = '';
@@ -2908,6 +2941,7 @@ Przykład:
             currentEditingVehicle = index;
             const vehicle = vehicles[index];
             document.getElementById('vehicleModalTitle').textContent = 'Edytuj pojazd';
+            document.getElementById('manualVehicleEntry').style.display = 'block';
             document.getElementById('vehicleRegistration').value = vehicle.registration || '';
             document.getElementById('vehicleVin').value = vehicle.vin || '';
             document.getElementById('vehicleBrand').value = vehicle.brand || '';
@@ -2918,6 +2952,7 @@ Przykład:
             document.getElementById('vehiclePower').value = vehicle.power || '';
             document.getElementById('vehicleFuel').value = vehicle.fuel || '';
             document.getElementById('vehicleWeight').value = vehicle.weight || '';
+            document.getElementById('vehicleKind').value = vehicle.kind || '';
             document.getElementById('vehicleOwner').value = vehicle.owner || '';
             document.getElementById('vehicleOwnerAddress').value = vehicle.ownerAddress || '';
             document.getElementById('vehicleMileage').value = vehicle.mileage || '';
@@ -2935,6 +2970,7 @@ Przykład:
             const power = document.getElementById('vehiclePower').value.trim();
             const fuel = document.getElementById('vehicleFuel').value;
             const weight = document.getElementById('vehicleWeight').value.trim();
+            const kind = document.getElementById('vehicleKind').value.trim();
             const owner = document.getElementById('vehicleOwner').value.trim();
             const ownerAddress = document.getElementById('vehicleOwnerAddress').value.trim();
             const mileage = document.getElementById('vehicleMileage').value;
@@ -2955,6 +2991,7 @@ Przykład:
                 power: power || null,
                 fuel: fuel || null,
                 weight: weight || null,
+                kind: kind || null,
                 owner: owner,
                 ownerAddress: ownerAddress || null,
                 mileage: mileage ? parseInt(mileage) : null,
@@ -3038,30 +3075,242 @@ Przykład:
             closeModal('mileageModal');
         }
 
+        // „MARKA MODEL (REJESTRACJA)” – ten sam zapis co w podpowiedziach pola „Pojazd” w dokumencie,
+        // dzięki czemu wydruk rozpoznaje pojazd i dokleja jego dane
+        function vehicleLabel(vehicle) {
+            if (!vehicle) return '';
+            const name = ((vehicle.brand || '') + ' ' + (vehicle.model || '')).trim();
+            return vehicle.registration ? (name + ' (' + vehicle.registration + ')').trim() : name;
+        }
+
         function displayVehicles() {
             const tbody = document.getElementById('vehiclesTableBody');
-            tbody.innerHTML = '';
-            
-            vehicles.forEach(function(vehicle, index){
-                const row = tbody.insertRow();
+
+            // Ostatnio dodane na górze; numer w przyciskach to nadal pozycja w tablicy vehicles
+            const order = [];
+            vehicles.forEach(function(vehicle, index){ if (vehicle) order.push(index); });
+            order.reverse();
+            const docOption = function(value, text){ return '<option value="'+value+'" style="color:#000;background:#fff;">'+text+'</option>'; };
+            tbody.innerHTML = order.map(function(index){
+                const vehicle = vehicles[index];
                 const currentMileage = vehicle.mileage || '-';
                 var silnikInfo = '';
                 if (vehicle.capacity) silnikInfo += vehicle.capacity + ' cm³';
                 if (vehicle.power) silnikInfo += (silnikInfo ? ' / ' : '') + vehicle.power + ' kW';
                 if (!silnikInfo) silnikInfo = vehicle.engineCode || '-';
-                row.innerHTML = '\n                    <td>'+escapeHtml(vehicle.registration)+'</td>\n                    <td>'+escapeHtml(vehicle.brand)+'</td>\n                    <td>'+escapeHtml(vehicle.model)+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+'</td>\n                    <td>'+escapeHtml(silnikInfo)+'</td>\n                    <td>'+escapeHtml(vehicle.fuel || '-')+'</td>\n                    <td>'+currentMileage+'</td>\n                    <td>'+escapeHtml(vehicle.owner)+'</td>\n                    <td class="action-buttons">\n                        <button class="btn btn-primary" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                ';
-            });
+                const vinCopy = vehicle.vin
+                    ? ' <button onclick="copyText(vehicles['+index+'].vin, this)" title="Kopiuj VIN" style="padding:1px 5px;font-size:11px;border:1px solid #ccc;background:#fff;border-radius:3px;cursor:pointer;">📋</button>'
+                    : '';
+                return '<tr data-veh-index="'+index+'" onclick="vehicleRowClick(event, '+index+')" style="cursor:pointer;" title="Kliknij, aby zobaczyć wszystkie dane pojazdu">\n                    <td><strong>'+escapeHtml(vehicle.registration||'')+'</strong></td>\n                    <td>'+escapeHtml(vehicle.brand||'')+'</td>\n                    <td>'+escapeHtml(vehicle.model||'')+'</td>\n                    <td>'+(vehicle.year || '-')+'</td>\n                    <td>'+escapeHtml(vehicle.vin || '-')+vinCopy+'</td>\n                    <td>'+escapeHtml(silnikInfo)+'</td>\n                    <td>'+escapeHtml(vehicle.fuel || '-')+'</td>\n                    <td>'+escapeHtml(currentMileage)+'</td>\n                    <td>'+escapeHtml(vehicle.owner||'')+'</td>\n                    <td class="action-buttons" style="flex-wrap:wrap;">\n                        <button class="btn btn-primary" onclick="showVehicleDetails('+index+')" title="Wszystkie dane pojazdu z przyciskami Kopiuj">Pokaż dane</button>\n                        <select onchange="newDocumentFromVehicle('+index+', this.value); this.value=\'\';" title="Nowy dokument dla tego pojazdu – pojazd i klient wpiszą się same" style="height:22px;padding:0 2px;font-size:11px;border:none;border-radius:4px;background:#fd7e14;color:#fff;cursor:pointer;">'+docOption('', '+ Dokument…')+docOption('kosztorys', 'Kosztorys')+docOption('paragon', 'Paragon')+docOption('faktura', 'Faktura')+'</select>\n                        <button class="btn" onclick="editVehicle('+index+')">Edytuj</button>\n                        <button class="btn" onclick="showMileageModal('+index+')">+ Przebieg</button>\n                        <button class="btn btn-danger" onclick="deleteVehicle('+index+')">Usuń</button>\n                    </td>\n                </tr>';
+            }).join('');
+            try { filterVehicles(); } catch(e) {}
+            try { refreshVehicleDetailsIfOpen(); } catch(e) { console.error(e); }
         }
 
         function filterVehicles() {
             const searchInput = document.getElementById('vehicleSearch');
             const searchTerm = searchInput ? searchInput.value : '';
             const rows = document.querySelectorAll('#vehiclesTableBody tr');
-            
+
             rows.forEach(function(row){
-                const text = row.textContent || '';
+                // Szukamy w danych pojazdu, a nie w napisach na przyciskach
+                const v = vehicles[parseInt(row.getAttribute('data-veh-index'), 10)];
+                const text = v
+                    ? [v.registration, String(v.registration || '').replace(/\s+/g, ''), v.brand, v.model, v.year, v.vin, v.owner, v.ownerAddress, v.kind, v.fuel, v.engineCode, v.capacity].filter(Boolean).join(' ')
+                    : (row.textContent || '');
                 row.style.display = matchesSearchTokens(text, searchTerm) ? '' : 'none';
             });
+        }
+
+        // Kliknięcie wiersza (poza przyciskami) otwiera okno z danymi pojazdu
+        function vehicleRowClick(event, index) {
+            if (event && event.target && event.target.closest && event.target.closest('button, select, option, a, input')) return;
+            if (window.getSelection && String(window.getSelection())) return; // zaznaczanie tekstu to nie kliknięcie
+            showVehicleDetails(index);
+        }
+
+        // Kopiowanie do schowka z krótkim potwierdzeniem na przycisku
+        function copyText(text, el) {
+            text = String(text === undefined || text === null ? '' : text);
+            if (!text) return;
+            const flash = function(ok){
+                if (!el) return;
+                if (el._copyTimer) clearTimeout(el._copyTimer); else el._copyLabel = el.textContent;
+                el.textContent = ok ? (el._copyLabel.length > 2 ? '✓ Skopiowano' : '✓') : 'Błąd';
+                el._copyTimer = setTimeout(function(){ el.textContent = el._copyLabel; el._copyTimer = null; }, 1200);
+            };
+            const fallback = function(){
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    ta.remove();
+                    return ok;
+                } catch (e) { return false; }
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function(){ flash(true); }, function(){ flash(fallback()); });
+            } else {
+                flash(fallback());
+            }
+        }
+
+        // === OKNO „DANE POJAZDU”: podgląd, kopiowanie, nowy dokument, historia dokumentów ===
+        let _vehicleDetailsRef = null;   // pojazd pokazywany w oknie
+        let _vehicleDetailsCopy = [];    // wartości pod przyciskami „Kopiuj”
+
+        function vehicleDetailRows(v) {
+            const rows = [];
+            const add = function(label, shown, copy){
+                if (shown === undefined || shown === null || String(shown).trim() === '') return;
+                rows.push({ label: label, shown: String(shown), copy: String(copy !== undefined ? copy : shown) });
+            };
+            const capStr = String(v.capacity || '').trim();
+            const powStr = String(v.power || '').trim();
+            const kw = parseFloat(powStr.replace(',', '.'));
+            add('Rejestracja', v.registration);
+            add('VIN', v.vin);
+            add('Marka', v.brand);
+            add('Model', v.model);
+            add('Rok produkcji', v.year);
+            add('Rodzaj pojazdu', v.kind);
+            if (capStr) add('Pojemność', capStr + (/cm/i.test(capStr) ? '' : ' cm³'), capStr.replace(/[^\d.,]/g, '') || capStr);
+            if (powStr) add('Moc', powStr + (/kw/i.test(powStr) ? '' : ' kW') + (isNaN(kw) ? '' : ' (' + Math.round(kw * 1.35962) + ' KM)'), isNaN(kw) ? powStr : String(kw));
+            add('Paliwo', v.fuel);
+            // „Kod silnika” bywa wypełniony pojemnością (ze skanu) – wtedy go nie powtarzamy
+            if (v.engineCode && String(v.engineCode).trim() !== capStr.replace(/[^\d]/g, '')) add('Kod silnika', v.engineCode);
+            if (v.weight) add('Masa własna', String(v.weight) + (/kg/i.test(String(v.weight)) ? '' : ' kg'), v.weight);
+            add('Właściciel', v.owner);
+            add('Adres właściciela', v.ownerAddress);
+            if (v.mileage) add('Przebieg', v.mileage + ' km', v.mileage);
+            return rows;
+        }
+
+        // Komplet danych jako tekst – np. do wklejenia w zamówieniu w hurtowni albo w wiadomości
+        function vehicleDetailsText(v) {
+            return [((v.brand || '') + ' ' + (v.model || '')).trim()]
+                .concat(vehicleDetailRows(v).filter(function(r){ return r.label !== 'Marka' && r.label !== 'Model'; })
+                    .map(function(r){ return r.label + ': ' + r.shown; }))
+                .filter(Boolean).join('\n');
+        }
+
+        // Czy dokument dotyczy tego pojazdu (pole „Pojazd” w dokumencie to zwykły tekst)
+        function docMatchesVehicle(doc, v) {
+            const text = String((doc && doc.vehicle) || '').trim();
+            if (!text || !v) return false;
+            const alnum = function(s){ return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+            const reg = alnum(v.registration), vin = alnum(v.vin);
+            if (normalizeSearchString(text) === normalizeSearchString(vehicleLabel(v))) return true;
+            const paren = text.match(/\(([^)]+)\)\s*$/);
+            const token = paren ? alnum(paren[1]) : '';
+            if (token && ((reg && token === reg) || (vin && token === vin))) return true;
+            const whole = alnum(text);
+            if (vin && whole === vin) return true;
+            if (reg && whole === reg) return true;
+            return false;
+        }
+
+        function showVehicleDetails(index) {
+            const v = vehicles[index];
+            const box = document.getElementById('vehicleDetailsContent');
+            if (!v || !box) return;
+            _vehicleDetailsRef = v;
+            const rows = vehicleDetailRows(v);
+            _vehicleDetailsCopy = rows.map(function(r){ return r.copy; });
+            const gap = 'margin:0 6px 6px 0;';
+
+            let html = '<h2 style="margin-top:0;padding-right:70px;">' + escapeHtml(vehicleLabel(v) || 'Pojazd') + '</h2>';
+            html += '<div style="margin-bottom:12px;">' +
+                '<button class="btn" style="'+gap+'" onclick="newDocumentFromVehicle('+index+', \'kosztorys\')">Nowy kosztorys</button>' +
+                '<button class="btn" style="'+gap+'" onclick="newDocumentFromVehicle('+index+', \'paragon\')">Nowy paragon</button>' +
+                '<button class="btn" style="'+gap+'" onclick="newDocumentFromVehicle('+index+', \'faktura\')">Nowa faktura</button>' +
+                '</div>';
+
+            html += '<table class="vehicle-table" style="margin-top:0;">';
+            rows.forEach(function(r, i){
+                html += '<tr>' +
+                    '<td style="width:170px;font-weight:bold;font-size:13px;">' + escapeHtml(r.label) + '</td>' +
+                    '<td style="font-size:15px;cursor:pointer;" title="Kliknij, aby skopiować" onclick="copyText(_vehicleDetailsCopy['+i+'], this.nextElementSibling.firstChild)">' + escapeHtml(r.shown) + '</td>' +
+                    '<td style="width:120px;text-align:center;"><button class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="copyText(_vehicleDetailsCopy['+i+'], this)">Kopiuj</button></td>' +
+                    '</tr>';
+            });
+            html += '</table>';
+
+            const history = Array.isArray(v.mileageHistory) ? v.mileageHistory.slice(-6).reverse() : [];
+            if (history.length > 1) {
+                html += '<p style="font-size:12px;color:#555;margin:8px 0 0;"><strong>Historia przebiegu:</strong> ' +
+                    history.map(function(h){ return escapeHtml((h.date || '') + ': ' + (h.mileage || '') + ' km'); }).join(' &middot; ') + '</p>';
+            }
+
+            html += '<div style="margin-top:12px;">' +
+                '<button class="btn btn-copy" style="'+gap+'" onclick="copyText(vehicleDetailsText(vehicles['+index+']), this)" title="Wszystkie dane jednym tekstem – np. do zamówienia w hurtowni">Kopiuj wszystkie dane</button>' +
+                '<button class="btn btn-primary" style="'+gap+'" onclick="closeModal(\'vehicleDetailsModal\'); editVehicle('+index+')">Edytuj dane</button>' +
+                '<button class="btn" style="'+gap+'background:#6c757d;" onclick="showMileageModal('+index+')">+ Przebieg</button>' +
+                '</div>';
+
+            // Dokumenty wystawione na ten pojazd – od najnowszych
+            const docIdx = [];
+            documents.forEach(function(d, i){ if (d && docMatchesVehicle(d, v)) docIdx.push(i); });
+            docIdx.sort(function(a, b){
+                const da = String(documents[a].date || ''), db = String(documents[b].date || '');
+                if (da !== db) return da < db ? 1 : -1;
+                return b - a;
+            });
+            html += '<h3 style="margin:18px 0 6px;">Dokumenty tego pojazdu (' + docIdx.length + ')</h3>';
+            if (!docIdx.length) {
+                html += '<p style="color:#777;font-size:13px;margin:0;">Brak dokumentów wystawionych na ten pojazd.</p>';
+            } else {
+                html += '<table class="vehicle-table" style="margin-top:0;"><thead><tr><th>Data</th><th>Typ</th><th>Numer</th><th>Klient</th><th>Suma</th><th></th></tr></thead><tbody>';
+                docIdx.slice(0, 50).forEach(function(i){
+                    const d = documents[i];
+                    html += '<tr><td>' + escapeHtml(d.date || '') + '</td><td>' + escapeHtml(d.type || '') + '</td><td>' + escapeHtml(d.number || '') + '</td><td>' + escapeHtml(d.client || '') + '</td>' +
+                        '<td style="white-space:nowrap;">' + (Number(d.total) || 0).toFixed(2) + ' zł</td>' +
+                        '<td class="action-buttons"><button class="btn btn-primary" onclick="closeModal(\'vehicleDetailsModal\'); editDocument('+i+')">Otwórz</button></td></tr>';
+                });
+                html += '</tbody></table>';
+                if (docIdx.length > 50) html += '<p style="color:#777;font-size:12px;">Pokazano 50 najnowszych z ' + docIdx.length + '.</p>';
+            }
+
+            box.innerHTML = html;
+            document.getElementById('vehicleDetailsModal').style.display = 'block';
+        }
+
+        // Po zmianie danych (np. dopisany przebieg, zmiana z innego komputera) odśwież otwarte okno
+        function refreshVehicleDetailsIfOpen() {
+            const modal = document.getElementById('vehicleDetailsModal');
+            if (!modal || modal.style.display !== 'block' || !_vehicleDetailsRef) return;
+            const i = fbFindSame('vehicles', _vehicleDetailsRef);
+            if (i === -1) {
+                modal.style.display = 'none';
+                _vehicleDetailsRef = null;
+            } else {
+                showVehicleDetails(i);
+            }
+        }
+
+        // Nowy kosztorys / paragon / faktura z wpisanym już pojazdem i klientem (właścicielem)
+        function newDocumentFromVehicle(index, type) {
+            const v = vehicles[index];
+            if (!v || !type) return;
+            closeModal('vehicleDetailsModal');
+            showNewDocumentModal(type);
+            document.getElementById('documentVehicle').value = vehicleLabel(v);
+            markDocumentVehicleProgrammatic();
+            if (v.owner) {
+                document.getElementById('documentClient').value = v.owner;
+                markDocumentClientProgrammatic();
+            }
+            // Adres klienta tylko na fakturze – na pozostałych drukuje się już przy danych pojazdu
+            if (type === 'faktura' && v.ownerAddress) {
+                document.getElementById('documentClientAddress').value = v.ownerAddress;
+            }
+            setTimeout(function(){
+                const pos = document.getElementById('positionName');
+                if (pos) { try { pos.focus(); } catch (e) {} }
+            }, 50);
         }
 
         // Funkcje zleceń
@@ -8331,6 +8580,7 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
             }
             if (dr.typ) v.modelVariant = dr.typ;
             if (dr.kategoria) v.category = dr.kategoria;
+            if (dr.rodzajPojazdu) v.kind = dr.rodzajPojazdu;
             
             // Dane właściciela (z kodu Aztec - nowy format)
             if (dr.pelneNazwisko) v.owner = dr.pelneNazwisko;
@@ -8366,6 +8616,16 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                 if (holderAddr.length > 0) v.holderAddress = holderAddr.join(', ');
             }
             
+            // W kodzie pierwsza osoba to posiadacz dowodu (C.1), a druga – właściciel pojazdu (C.2).
+            // Wyżej trafiły do pól odwrotnie, więc zamiana: owner = właściciel, holder = posiadacz.
+            if (v.holderName) {
+                const firstName = v.ownerName, firstAddr = v.ownerAddress;
+                v.owner = v.ownerName = v.holderName;
+                if (v.holderAddress) v.ownerAddress = v.holderAddress; else delete v.ownerAddress;
+                if (firstName) v.holderName = firstName; else delete v.holderName;
+                if (firstAddr) v.holderAddress = firstAddr; else delete v.holderAddress;
+            }
+
             // Miejsca siedzące
             if (dr.miejscSiedzacych) v.seats = parseInt(dr.miejscSiedzacych);
             // Seria dowodu
@@ -8598,47 +8858,97 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
         // === PODGLĄD DANYCH ===
         function showQRDataPreview(data, format) {
             const resultDiv = document.getElementById('qrResult');
-            
+            const item = function(label, value, style){
+                if (value === undefined || value === null || value === '') return '';
+                return '<div class="qr-data-item"' + (style ? ' style="' + style + '"' : '') + '><strong>' + label + ':</strong> ' + escapeHtml(value) + '</div>';
+            };
+
             let html = '<div class="qr-result">';
-            html += '<h4>✅ Odczytano dane pojazdu' + (format ? ' (kod ' + format + ')' : '') + ':</h4>';
+            html += '<h4>✅ Odczytano dane pojazdu' + (format ? ' (' + escapeHtml(format) + ')' : '') + ':</h4>';
             html += '<div class="qr-data-preview">';
-            
-            if (data.registration) html += '<div class="qr-data-item"><strong>Rejestracja (A):</strong> ' + data.registration + '</div>';
-            if (data.brand) html += '<div class="qr-data-item"><strong>Marka (C.1.1):</strong> ' + data.brand + '</div>';
-            if (data.model) html += '<div class="qr-data-item"><strong>Model (C.1.2):</strong> ' + data.model + '</div>';
-            if (data.modelVariant) html += '<div class="qr-data-item"><strong>Wersja (C.1.3):</strong> ' + data.modelVariant + '</div>';
-            if (data.year) html += '<div class="qr-data-item"><strong>Rok:</strong> ' + data.year + '</div>';
-            if (data.firstRegistration) html += '<div class="qr-data-item"><strong>I rejestracja (B):</strong> ' + data.firstRegistration + '</div>';
-            if (data.vin) html += '<div class="qr-data-item"><strong>VIN (E):</strong> ' + data.vin + '</div>';
-            if (data.engineCapacity) html += '<div class="qr-data-item"><strong>Pojemność (P.1):</strong> ' + data.engineCapacity + '</div>';
-            if (data.power) html += '<div class="qr-data-item"><strong>Moc (P.2):</strong> ' + data.power + ' kW</div>';
-            if (data.fuel) html += '<div class="qr-data-item"><strong>Paliwo (P.3):</strong> ' + (data.fuelDisplay || data.fuel) + '</div>';
-            if (data.weight || data.mass) html += '<div class="qr-data-item"><strong>Masa (G):</strong> ' + (data.weight || data.mass) + ' kg</div>';
-            if (data.maxMass) html += '<div class="qr-data-item"><strong>Masa max (F.2):</strong> ' + data.maxMass + ' kg</div>';
-            if (data.seats) html += '<div class="qr-data-item"><strong>Miejsca siedzące:</strong> ' + data.seats + '</div>';
-            if (data.documentSeries) html += '<div class="qr-data-item"><strong>Seria dowodu:</strong> ' + data.documentSeries + '</div>';
-            
+
+            html += item('Rejestracja (A)', data.registration);
+            html += item('Marka (D.1)', data.brand);
+            html += item('Model (D.3)', data.model);
+            html += item('Wersja', data.modelVariant);
+            html += item('Rodzaj pojazdu', data.kind);
+            html += item('Rok', data.year);
+            html += item('I rejestracja (B)', data.firstRegistration);
+            html += item('VIN (E)', data.vin);
+            html += item('Pojemność (P.1)', data.engineCapacity);
+            html += item('Moc (P.2)', data.power ? data.power + ' kW' : '');
+            if (data.fuel || data.fuelDisplay) {
+                const shown = data.fuelDisplay || data.fuel;
+                html += item('Paliwo (P.3)', (data.fuel && shown !== data.fuel) ? shown + ' (' + data.fuel + ')' : shown);
+            }
+            html += item('Masa własna (G)', (data.weight || data.mass) ? (data.weight || data.mass) + ' kg' : '');
+            html += item('Masa dopuszczalna (F.2)', data.maxMass ? data.maxMass + ' kg' : '');
+            html += item('Miejsca siedzące', data.seats);
+            html += item('Seria dowodu', data.documentSeries);
+
             // Dane właściciela/kierowcy
-            if (data.ownerName || data.owner) html += '<div class="qr-data-item" style="border-top: 1px solid #ddd; padding-top: 8px; margin-top: 8px;"><strong>👤 Właściciel:</strong> ' + (data.ownerName || data.owner) + '</div>';
-            if (data.ownerAddress) html += '<div class="qr-data-item"><strong>📍 Adres właściciela:</strong> ' + data.ownerAddress + '</div>';
-            if (data.holderName && data.holderName !== data.ownerName) html += '<div class="qr-data-item"><strong>👤 Posiadacz dowodu:</strong> ' + data.holderName + '</div>';
-            if (data.holderAddress && data.holderAddress !== data.ownerAddress) html += '<div class="qr-data-item"><strong>📍 Adres posiadacza:</strong> ' + data.holderAddress + '</div>';
-            
+            const ownerShown = data.ownerName || data.owner;
+            html += item('👤 Właściciel', ownerShown, 'border-top: 1px solid #ddd; padding-top: 8px; margin-top: 8px;');
+            html += item('📍 Adres właściciela', data.ownerAddress);
+            const holderDiffers = !!(data.holderName && data.holderName !== ownerShown);
+            if (holderDiffers) html += item('👤 Posiadacz dowodu', data.holderName);
+            if (data.holderAddress && (holderDiffers || data.holderAddress !== data.ownerAddress)) html += item('📍 Adres posiadacza', data.holderAddress);
+
+            // Czego zabrakło do rubryk formularza – od razu widać, co trzeba dopisać ręcznie
+            const missing = [];
+            if (!data.registration) missing.push('rejestracja');
+            if (!data.brand) missing.push('marka');
+            if (!data.model) missing.push('model');
+            if (!data.vin) missing.push('VIN');
+            if (!data.year) missing.push('rok');
+            if (!data.engineCapacity) missing.push('pojemność');
+            if (!data.power) missing.push('moc');
+            if (!(data.fuel || data.fuelDisplay)) missing.push('paliwo');
+            if (!(data.weight || data.mass)) missing.push('masa własna');
+            if (!ownerShown) missing.push('właściciel');
+            if (!data.ownerAddress) missing.push('adres właściciela');
+            if (missing.length) {
+                html += '<div class="qr-data-item" style="background:#fff3cd;margin-top:8px;">⚠️ Brak w odczytanych danych: ' + escapeHtml(missing.join(', ')) + '</div>';
+            }
+
+            // Komplet danych z dowodu (do wglądu; do bazy trafiają rubryki formularza)
+            if (Array.isArray(data._rows) && data._rows.length) {
+                html += '<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:bold;">Pokaż wszystkie odczytane dane z dowodu (' + data._rows.length + ')</summary>';
+                let lastSection = null;
+                data._rows.forEach(function(r){
+                    if (r.section !== lastSection) {
+                        html += '<div style="margin-top:8px;font-weight:bold;color:#007bff;">' + escapeHtml(r.section) + '</div>';
+                        lastSection = r.section;
+                    }
+                    html += '<div class="qr-data-item"><strong>' + escapeHtml(r.label) + ':</strong> ' + escapeHtml(r.value) + '</div>';
+                });
+                html += '</details>';
+            }
+
             html += '</div>';
+            // Dane trzymamy w zmiennej – wklejanie ich do atrybutu onclick psuło przycisk,
+            // gdy w danych był apostrof (np. w nazwisku lub nazwie firmy)
+            window._pendingQRData = data;
             html += '<div style="margin-top: 15px;">';
-            html += '<button class="btn" onclick=\'fillVehicleForm(' + JSON.stringify(data).replace(/'/g, "\\'") + ')\'>✅ Wypełnij formularz</button> ';
+            html += '<button class="btn" onclick="fillVehicleForm(window._pendingQRData)">✅ Wypełnij formularz</button> ';
+            if (holderDiffers) {
+                html += '<button class="btn btn-primary" onclick="fillVehicleForm(window._pendingQRData, true)" title="W rubryce „Właściciel” zostanie wpisany posiadacz dowodu (C.1) zamiast właściciela pojazdu (C.2) – np. przy autach w leasingu">✅ Wypełnij – wpisz posiadacza dowodu</button> ';
+            }
             html += '<button class="btn" style="background:#6c757d;" onclick="showManualEntry()">✏️ Edytuj ręcznie</button>';
             html += '</div></div>';
-            
+
             resultDiv.innerHTML = html;
             resultDiv.style.display = 'block';
             document.getElementById('qrError').style.display = 'none';
+            try { resultDiv.scrollIntoView({ block: 'nearest' }); } catch (e) {}
         }
 
         // === WYPEŁNIANIE FORMULARZA ===
-        function fillVehicleForm(data) {
+        // useHolder = true: w rubryce „Właściciel” wpisz posiadacza dowodu (C.1) zamiast właściciela (C.2)
+        function fillVehicleForm(data, useHolder) {
+            if (!data) return;
             currentQRData = data;
-            
+
             if (data.registration) document.getElementById('vehicleRegistration').value = data.registration;
             if (data.vin) document.getElementById('vehicleVin').value = data.vin;
             if (data.brand) document.getElementById('vehicleBrand').value = data.brand;
@@ -8648,24 +8958,30 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                 document.getElementById('vehicleModel').value = modelValue;
             }
             if (data.year) document.getElementById('vehicleYear').value = data.year;
-            
-            // Pojemność silnika → pole "Kod silnika" (engineCode) + nowe pole "Pojemność"
+            if (data.kind) document.getElementById('vehicleKind').value = data.kind;
+
+            // Pojemność silnika → pole "Pojemność"; do "Kod silnika" tylko gdy jest puste
+            // (dowód nie zawiera kodu silnika, a wpisanego ręcznie nie wolno nadpisać)
             if (data.engineCapacity) {
-                const cap = data.engineCapacity.replace(/[^\d]/g, '');
-                document.getElementById('vehicleEngineCode').value = cap;
+                const cap = String(data.engineCapacity).replace(/[^\d]/g, '');
+                const codeEl = document.getElementById('vehicleEngineCode');
+                if (codeEl && !codeEl.value.trim()) codeEl.value = cap;
                 document.getElementById('vehicleCapacity').value = cap;
             }
-            
+
             // Moc silnika
             if (data.power) {
                 document.getElementById('vehiclePower').value = data.power;
             }
-            
+
             // Paliwo - mapuj na wartości selecta
             if (data.fuelDisplay || data.fuel) {
                 const fuelSelect = document.getElementById('vehicleFuel');
-                const fuelText = (data.fuelDisplay || data.fuel || '').toLowerCase();
-                if (fuelText.includes('diesel') || fuelText.includes('olej') || data.fuel === 'D') {
+                const fuelText = String(data.fuelDisplay || data.fuel || '').toLowerCase();
+                const exact = Array.from(fuelSelect.options).find(function(o){ return o.value && o.value === data.fuelDisplay; });
+                if (exact) {
+                    fuelSelect.value = exact.value;
+                } else if (fuelText.includes('diesel') || fuelText.includes('olej') || data.fuel === 'D') {
                     fuelSelect.value = 'Diesel';
                 } else if (fuelText.includes('lpg')) {
                     fuelSelect.value = 'Benzyna+LPG';
@@ -8677,23 +8993,28 @@ Lub powiedz mi czego szukasz, a postaram się pomóc!
                     fuelSelect.value = 'Hybryda';
                 }
             }
-            
+
             // Masa
-            if (data.weight) {
-                document.getElementById('vehicleWeight').value = data.weight;
+            if (data.weight || data.mass) {
+                document.getElementById('vehicleWeight').value = data.weight || data.mass;
             }
-            
-            // Właściciel - z importu Android lub Aztec
-            if (data.ownerName || data.owner) {
-                document.getElementById('vehicleOwner').value = data.ownerName || data.owner;
+
+            // Właściciel - z importu lub Aztec
+            const holderWanted = !!(useHolder && data.holderName);
+            const ownerValue = holderWanted ? data.holderName : (data.ownerName || data.owner);
+            const addressValue = holderWanted ? (data.holderAddress || '') : data.ownerAddress;
+            if (ownerValue) {
+                document.getElementById('vehicleOwner').value = ownerValue;
             }
-            if (data.ownerAddress) {
-                document.getElementById('vehicleOwnerAddress').value = data.ownerAddress;
+            if (addressValue) {
+                document.getElementById('vehicleOwnerAddress').value = addressValue;
             }
-            
+
+            const importTa = document.getElementById('drImportTextarea');
+            if (importTa) importTa.value = '';
             closeModal('qrScannerModal');
             document.getElementById('manualVehicleEntry').style.display = 'block';
-            alert('✅ Dane pojazdu wypełnione z kodu ' + (data._format || 'Aztec') + '!');
+            alert('✅ Dane pojazdu wypełnione (' + (data._format || 'kod Aztec') + '). Sprawdź i naciśnij „Zapisz”.');
         }
 
         // === BŁĘDY ===
@@ -8751,26 +9072,353 @@ P.3:P LPG`;
         // Źródło: "Kopiuj do schowka" w aplikacji wkolendo.dowodyrejestracyjne
         // ============================================================
         
+        // ============================================================
+        // === IMPORT Z APLIKACJI „Skaner Dowodów” (własna aplikacja na Androida) ===
+        // Przyjmuje tekst z „Kopiuj wszystko” / „Udostępnij”:
+        //     Pojazd
+        //     Numer rejestracyjny (A): DLW VK98
+        //     Marka (D.1): CITROEN
+        //     ...
+        //     Właściciel pojazdu (C.2)
+        //     Imię i nazwisko lub nazwa: ...
+        // oraz z „Kopiuj surowy tekst kodu” (pola rozdzielone znakiem |).
+        // Tekst może przyjść przez WhatsApp – także z dopiskiem „[12:30, 13.10.2026] Imię:”
+        // albo sklejony w jedną linię.
+        // ============================================================
+        const SKANER_SECTIONS = [
+            { key: 'vehicle',  title: 'Pojazd' },
+            { key: 'owner',    title: 'Właściciel pojazdu (C.2)' },
+            { key: 'holder',   title: 'Posiadacz dowodu rejestracyjnego (C.1)' },
+            { key: 'document', title: 'Dokument' },
+            { key: 'engine',   title: 'Silnik' },
+            { key: 'mass',     title: 'Masy i osie' },
+            { key: 'seats',    title: 'Miejsca' },
+            { key: 'rest',     title: 'Pozostałe pola' }
+        ];
+        // [klucz, sekcja, etykieta w skanerze, rubryka dowodu (gdy jednoznaczna)]
+        const SKANER_FIELDS = [
+            ['registration', 'vehicle', 'Numer rejestracyjny', 'A'],
+            ['brand', 'vehicle', 'Marka', 'D.1'],
+            ['model', 'vehicle', 'Model', 'D.3'],
+            ['type', 'vehicle', 'Typ', ''],
+            ['variant', 'vehicle', 'Wariant', ''],
+            ['version', 'vehicle', 'Wersja', ''],
+            ['vin', 'vehicle', 'Numer VIN', 'E'],
+            ['productionYear', 'vehicle', 'Rok produkcji', ''],
+            ['kind', 'vehicle', 'Rodzaj pojazdu', ''],
+            ['purpose', 'vehicle', 'Przeznaczenie', ''],
+            ['category', 'vehicle', 'Kategoria pojazdu', 'J'],
+            ['homologation', 'vehicle', 'Numer świadectwa homologacji', 'K'],
+            ['name', 'person', 'Imię i nazwisko lub nazwa', ''],
+            ['surname', 'person', 'Nazwisko', ''],
+            ['firstNames', 'person', 'Imiona', ''],
+            ['pesel', 'person', 'PESEL lub REGON', ''],
+            ['address', 'person', 'Adres', ''],
+            ['street', 'person', 'Ulica i numer', ''],
+            ['postal', 'person', 'Kod pocztowy', ''],
+            ['city', 'person', 'Miejscowość', ''],
+            ['series', 'document', 'Seria i numer dowodu', ''],
+            ['authority', 'document', 'Organ wydający', ''],
+            ['authorityCode', 'document', 'Kod organu wydającego', ''],
+            ['issueDate', 'document', 'Data wydania dowodu', 'I'],
+            ['validUntil', 'document', 'Termin ważności', 'H'],
+            ['firstRegistration', 'document', 'Data pierwszej rejestracji', 'B'],
+            ['vehicleCard', 'document', 'Numer karty pojazdu', ''],
+            ['capacity', 'engine', 'Pojemność silnika', 'P.1'],
+            ['power', 'engine', 'Moc silnika', 'P.2'],
+            ['fuel', 'engine', 'Rodzaj paliwa', 'P.3'],
+            ['powerRatio', 'engine', 'Stosunek mocy do masy', 'Q'],
+            ['maxMassTech', 'mass', 'Maks. masa całkowita', 'F.1'],
+            ['maxMass', 'mass', 'Dopuszczalna masa całkowita', 'F.2'],
+            ['maxMassSet', 'mass', 'Dopuszczalna masa całkowita zespołu', 'F.3'],
+            ['weight', 'mass', 'Masa własna', 'G'],
+            ['payload', 'mass', 'Dopuszczalna ładowność', ''],
+            ['axleLoad', 'mass', 'Największy dopuszczalny nacisk osi', ''],
+            ['axles', 'mass', 'Liczba osi', 'L'],
+            ['trailerBraked', 'mass', 'Maks. masa przyczepy z hamulcem', 'O.1'],
+            ['trailerUnbraked', 'mass', 'Maks. masa przyczepy bez hamulca', 'O.2'],
+            ['seats', 'seats', 'Liczba miejsc siedzących', 'S.1'],
+            ['standing', 'seats', 'Liczba miejsc stojących', 'S.2']
+        ];
+
+        // Etykieta do porównań: bez wielkości liter, polskich znaków, rubryk „(D.1)” i jednostek „[kg]”
+        function skanerNorm(s) {
+            return String(s || '').toLowerCase().replace(/ł/g, 'l')
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+                .replace(/[^a-z0-9]+/g, ' ').trim();
+        }
+        let _skanerMaps = null;
+        function skanerMaps() {
+            if (_skanerMaps) return _skanerMaps;
+            const esc = function(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
+            const byLabel = {}, byCode = {}, sections = {};
+            SKANER_FIELDS.forEach(function(f){ byLabel[skanerNorm(f[2])] = f; if (f[3]) byCode[f[3]] = f; });
+            SKANER_SECTIONS.forEach(function(sec){ sections[skanerNorm(sec.title)] = sec.key; });
+            const alts = SKANER_FIELDS.map(function(f){ return esc(f[2]); }).sort(function(a, b){ return b.length - a.length; });
+            const label = '(?:' + alts.join('|') + '|Pole \\d+)(?:[ \\t]*\\([A-Z](?:\\.\\d)?\\))?(?:[ \\t]*\\[[^\\]\\n]{1,8}\\])?[ \\t]*:';
+            _skanerMaps = {
+                byLabel: byLabel, byCode: byCode, sections: sections,
+                // etykieta w środku linii (tekst sklejony) – przed nią wstawiamy nową linię
+                splitRe: new RegExp('([^\\n])[ \\t]+(' + label + ')', 'g'),
+                labelRe: new RegExp(label, 'g'),
+                // nagłówek sekcji doklejony na końcu wartości (tylko w tekście sklejonym)
+                tailLongRe: /\s+(Właściciel pojazdu(?:\s*\(C\.2\))?|Posiadacz dowodu rejestracyjnego(?:\s*\(C\.1\))?)\s*$/,
+                tailShortRe: /\s+(Dokument|Silnik|Masy i osie|Miejsca|Pozostałe pola)\s*$/
+            };
+            return _skanerMaps;
+        }
+        // WhatsApp przy kopiowaniu kilku wiadomości dopisuje „[12:30, 13.10.2026] Imię: ”,
+        // a w eksporcie rozmowy „13.10.2026, 12:30 - Imię: ”
+        function skanerStripChatPrefix(text) {
+            return String(text || '').replace(/\r\n?/g, '\n').replace(/[  ]/g, ' ')
+                .replace(/^[ \t]*\[[^\]\n]{4,40}\][ \t]*[^:\n]{0,40}:[ \t]*/gm, '')
+                .replace(/^[ \t]*\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4},?[ \t]+\d{1,2}:\d{2}(?::\d{2})?[ \t]*-[ \t]*[^:\n]{0,40}:[ \t]*/gm, '');
+        }
+        function skanerClean(v) {
+            const s = String(v || '').replace(/\s+/g, ' ').trim();
+            return /^-+$/.test(s) ? '' : s; // „---” w dowodzie = brak danych
+        }
+
+        // Tekst z „Kopiuj wszystko” / „Udostępnij”
+        function parseSkanerDowodowText(rawText) {
+            const maps = skanerMaps();
+            let text = skanerStripChatPrefix(rawText);
+            const labelCount = (text.match(maps.labelRe) || []).length;
+            const lineCount = text.split('\n').filter(function(l){ return l.trim(); }).length;
+            const collapsed = labelCount >= 5 && lineCount < labelCount / 2; // zgubione znaki nowej linii
+            text = text.replace(maps.splitRe, function(m, before, label){ return before + '\n' + label; });
+
+            const rec = { vehicle: {}, owner: {}, holder: {}, extra: [] };
+            let person = null;   // 'owner' / 'holder' – czyje dane właśnie czytamy
+            let matched = 0;
+            text.split('\n').forEach(function(rawLine){
+                const line = rawLine.replace(/^[\s\-•*>]+/, '').trim();
+                if (!line) return;
+                const colon = line.indexOf(':');
+                const head = (colon === -1) ? line : line.slice(0, colon).trim();
+                let value = (colon === -1) ? '' : line.slice(colon + 1).trim();
+                if (!value) {
+                    // nagłówek sekcji („Pojazd”, „Właściciel pojazdu (C.2)”…)
+                    const sec = maps.sections[skanerNorm(head)];
+                    if (sec) person = (sec === 'owner' || sec === 'holder') ? sec : null;
+                    return;
+                }
+                let nextSection = null;
+                const tail = value.match(maps.tailLongRe) || (collapsed ? value.match(maps.tailShortRe) : null);
+                if (tail) {
+                    value = value.slice(0, tail.index);
+                    nextSection = maps.sections[skanerNorm(tail[1])] || null;
+                }
+                value = skanerClean(value);
+
+                let f = maps.byLabel[skanerNorm(head)];
+                if (!f) {
+                    const code = (head.match(/\(([A-Z](?:\.\d)?)\)\s*(?:\[[^\]]*\])?\s*$/) || [])[1];
+                    if (code) f = maps.byCode[code];
+                }
+                if (f && value) {
+                    matched++;
+                    if (f[1] === 'person') {
+                        // brak nagłówka sekcji: pierwsza osoba to właściciel, powtórzona etykieta = kolejna osoba
+                        if (!person) person = Object.keys(rec.owner).length ? 'holder' : 'owner';
+                        else if (rec[person][f[0]] !== undefined) person = (person === 'owner') ? 'holder' : 'owner';
+                        rec[person][f[0]] = value;
+                    } else {
+                        rec.vehicle[f[0]] = value;
+                    }
+                } else if (!f && value) {
+                    rec.extra.push({ label: head, value: value });
+                }
+                if (nextSection) person = (nextSection === 'owner' || nextSection === 'holder') ? nextSection : null;
+            });
+
+            const v = skanerRecordToVehicleData(rec);
+            v._matched = matched;
+            return v;
+        }
+
+        // Tekst z „Kopiuj surowy tekst kodu”: pola rozdzielone „|”, w stałej kolejności
+        // (ta sama numeracja pól co w aplikacji Skaner Dowodów)
+        function parseSkanerDowodowRaw(rawText) {
+            const fields = skanerStripChatPrefix(rawText).replace(/\n+/g, '').trim().split('|');
+            if (fields.length < 50) return null;
+            const val = function(i){ return skanerClean(fields[i]); };
+            const joinDistinct = function(parts){
+                const seen = {}; const kept = [];
+                parts.forEach(function(part){
+                    const words = String(part || '').split(' ').filter(Boolean);
+                    if (!words.length) return;
+                    if (words.every(function(w){ return seen[w.toUpperCase()]; })) return;
+                    words.forEach(function(w){ seen[w.toUpperCase()] = true; });
+                    kept.push(words.join(' '));
+                });
+                return kept.join(' ');
+            };
+            // adres w kodzie: kod pocztowy, miejscowość, gmina, ulica, nr domu, nr lokalu
+            const person = function(start){
+                const a = start + 5;
+                const postal = val(a), city = val(a + 1), street = val(a + 3), house = val(a + 4), flat = val(a + 5);
+                const number = !flat ? house : (!house ? flat : house + '/' + flat);
+                const streetLine = [street || (number ? city : ''), number].filter(Boolean).join(' ');
+                const p = {
+                    name: joinDistinct([val(start), val(start + 1), val(start + 2), val(start + 3)]),
+                    surname: val(start + 2), firstNames: val(start + 1), pesel: val(start + 4),
+                    address: [streetLine, [postal, city].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+                    street: streetLine, postal: postal, city: city
+                };
+                Object.keys(p).forEach(function(k){ if (!p[k]) delete p[k]; });
+                return p;
+            };
+            const idx = {
+                series: 1, authorityCode: 2, registration: 7, brand: 8, type: 9, variant: 10, version: 11, model: 12, vin: 13,
+                issueDate: 14, validUntil: 15, maxMassTech: 38, maxMass: 39, maxMassSet: 40, weight: 41, category: 42,
+                homologation: 43, axles: 44, trailerBraked: 45, trailerUnbraked: 46, powerRatio: 47, capacity: 48, power: 49,
+                fuel: 50, firstRegistration: 51, seats: 52, standing: 53, kind: 54, purpose: 55, productionYear: 56,
+                payload: 57, axleLoad: 58, vehicleCard: 59
+            };
+            const rec = { vehicle: {}, owner: person(27), holder: person(16), extra: [] };
+            Object.keys(idx).forEach(function(k){ const x = val(idx[k]); if (x) rec.vehicle[k] = x; });
+            const authority = [val(3), val(4), val(5), val(6)].filter(Boolean).join(', ');
+            if (authority) rec.vehicle.authority = authority;
+            if (!rec.vehicle.registration && !rec.vehicle.vin) return null;
+
+            const v = skanerRecordToVehicleData(rec);
+            v._matched = Object.keys(rec.vehicle).length;
+            return v;
+        }
+
+        // Rubryka P.3 dowodu → pozycja z listy „Rodzaj paliwa” w formularzu
+        function mapDRFuel(raw) {
+            const t = ' ' + String(raw || '').toUpperCase().replace(/Ł/g, 'L')
+                .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]+/g, ' ').trim() + ' ';
+            const has = function(code){ return t.indexOf(' ' + code + ' ') !== -1; };
+            const petrol = has('P') || has('PB') || /BENZYN/.test(t);
+            const diesel = has('D') || has('ON') || /DIESEL|OLEJ|NAPED/.test(t);
+            const electric = has('EE') || /ELEKTR/.test(t);
+            if (/HYBRY/.test(t) || (electric && (petrol || diesel))) return 'Hybryda';
+            if (has('LPG') || /PROPAN/.test(t)) return 'Benzyna+LPG';
+            if (has('CNG') || has('LNG') || /METAN/.test(t)) return 'CNG';
+            if (diesel) return 'Diesel';
+            if (petrol) return 'Benzyna';
+            if (electric) return 'Elektryczny';
+            return '';
+        }
+
+        // Wspólne dla obu formatów: rekord ze skanera → dane do podglądu i formularza pojazdu
+        function skanerRecordToVehicleData(rec) {
+            const r = rec.vehicle;
+            const num = function(x){
+                const m = String(x || '').replace(/\s/g, '').match(/\d+(?:[.,]\d+)?/);
+                return m ? parseFloat(m[0].replace(',', '.')) : NaN;
+            };
+            const v = {};
+            if (r.registration) v.registration = r.registration.toUpperCase();
+            if (r.brand) v.brand = r.brand.toUpperCase();
+            if (r.model) v.model = r.model.toUpperCase();
+            if (r.vin) v.vin = r.vin.toUpperCase().replace(/\s+/g, '');
+            if (r.firstRegistration) v.firstRegistration = r.firstRegistration;
+            const yearMatch = String(r.productionYear || '').match(/(19|20)\d{2}/) || String(r.firstRegistration || '').match(/(19|20)\d{2}/);
+            if (yearMatch) v.year = parseInt(yearMatch[0], 10);
+            if (!isNaN(num(r.capacity))) v.engineCapacity = Math.round(num(r.capacity)) + ' cm³';
+            if (!isNaN(num(r.power))) v.power = String(parseFloat(num(r.power).toFixed(2)));
+            if (r.fuel) { v.fuel = r.fuel; v.fuelDisplay = mapDRFuel(r.fuel) || r.fuel; }
+            if (!isNaN(num(r.weight))) v.weight = Math.round(num(r.weight));
+            const dmc = !isNaN(num(r.maxMass)) ? num(r.maxMass) : num(r.maxMassTech);
+            if (!isNaN(dmc)) v.maxMass = Math.round(dmc);
+            if (!isNaN(num(r.seats))) v.seats = Math.round(num(r.seats));
+            if (r.series) v.documentSeries = r.series;
+            if (r.category) v.category = r.category;
+            if (r.kind) v.kind = r.kind.toUpperCase();
+
+            const who = function(p){
+                return {
+                    name: skanerClean(p.name || [p.surname, p.firstNames].filter(Boolean).join(' ')),
+                    address: skanerClean(p.address || [p.street, [p.postal, p.city].filter(Boolean).join(' ')].filter(Boolean).join(', '))
+                };
+            };
+            const owner = who(rec.owner), holder = who(rec.holder);
+            // W rubryce „Właściciel” ląduje właściciel pojazdu (C.2); gdy go brak – posiadacz dowodu (C.1)
+            const main = owner.name ? owner : holder;
+            if (main.name) { v.owner = main.name; v.ownerName = main.name; }
+            if (main.address) v.ownerAddress = main.address;
+            if (owner.name && holder.name) {
+                v.holderName = holder.name;
+                if (holder.address) v.holderAddress = holder.address;
+            }
+
+            // Komplet odczytanych danych do podglądu (w kolejności ze skanera)
+            const rows = [];
+            const title = {};
+            SKANER_SECTIONS.forEach(function(sec){ title[sec.key] = sec.title; });
+            const pushRows = function(sectionKey, source, fieldGroup){
+                SKANER_FIELDS.forEach(function(f){
+                    if (f[1] !== fieldGroup || !source[f[0]]) return;
+                    rows.push({ section: title[sectionKey], label: f[2] + (f[3] ? ' (' + f[3] + ')' : ''), value: source[f[0]] });
+                });
+            };
+            pushRows('vehicle', r, 'vehicle');
+            pushRows('owner', rec.owner, 'person');
+            pushRows('holder', rec.holder, 'person');
+            ['document', 'engine', 'mass', 'seats'].forEach(function(k){ pushRows(k, r, k); });
+            (rec.extra || []).forEach(function(e){ rows.push({ section: title.rest, label: e.label, value: e.value }); });
+            v._rows = rows;
+            return v;
+        }
+
+        // Przycisk „Wklej dane ze Skanera Dowodów” w oknie pojazdu – od razu właściwa zakładka
+        function showDRImport() {
+            showQRScanner();
+            switchScannerTab('import');
+            const ta = document.getElementById('drImportTextarea');
+            if (ta) { try { ta.focus(); } catch (e) {} }
+        }
+
         function parseDRImportData() {
             const textarea = document.getElementById('drImportTextarea');
             const rawText = (textarea ? textarea.value : '').trim();
-            
+
             if (!rawText || rawText.length < 10) {
-                showQRError('Wklej dane skopiowane z aplikacji "Dowody Rejestracyjne" na Androidzie.');
+                showQRError('Wklej dane skopiowane z aplikacji „Skaner Dowodów” (przycisk „Kopiuj wszystko” albo „Udostępnij”).');
                 return;
             }
-            
-            console.log('=== PARSER IMPORT DR Android v10 ===');
-            console.log('Tekst wejściowy (' + rawText.length + ' znaków):', rawText.substring(0, 200));
-            
-            const vehicleData = parseAndroidDRText(rawText);
-            
+
+            let vehicleData = null;
+            let source = '';
+            try {
+                // 1. surowy tekst kodu (pola rozdzielone „|”)
+                if ((rawText.match(/\|/g) || []).length >= 40) {
+                    vehicleData = parseSkanerDowodowRaw(rawText);
+                    source = 'Skaner Dowodów – surowy kod';
+                }
+                // 2. „Kopiuj wszystko” / „Udostępnij”
+                if (!vehicleData) {
+                    vehicleData = parseSkanerDowodowText(rawText);
+                    source = 'Skaner Dowodów';
+                }
+            } catch (e) {
+                console.error('Import ze Skanera Dowodów nie powiódł się:', e);
+                vehicleData = null;
+            }
+            // 3. starsza aplikacja „Dowody Rejestracyjne Polskie” („- Nr rejestracyjny: …”).
+            // Wygrywa parser, który rozpoznał więcej głównych rubryk.
+            const score = function(v){
+                if (!v) return -1;
+                return ['registration', 'brand', 'model', 'vin', 'ownerName', 'engineCapacity'].filter(function(k){ return !!v[k]; }).length;
+            };
+            let legacy = null;
+            try { legacy = parseAndroidDRText(rawText); } catch (e) { console.error('Import DR Android nie powiódł się:', e); }
+            if (score(legacy) > score(vehicleData)) {
+                vehicleData = legacy;
+                source = 'Import DR Android';
+            }
+
             if (vehicleData && (vehicleData.registration || vehicleData.vin || vehicleData.brand)) {
-                vehicleData._format = 'Import DR Android';
-                vehicleData._source = 'android_dr';
+                vehicleData._format = source;
+                vehicleData._source = (source === 'Import DR Android') ? 'android_dr' : 'skaner_dowodow';
                 showQRDataPreview(vehicleData, 'Import z dowodu');
             } else {
-                showQRError('Nie udało się rozpoznać danych pojazdu.<br>Sprawdź czy wklejony tekst pochodzi z aplikacji "Dowody Rejestracyjne".<br><br>Oczekiwany format:<br><code>- Nr rejestracyjny: DLW VK98<br>- Marka pojazdu: CITROEN<br>- VIN: VF7UARHJH45348611</code>');
+                showQRError('Nie udało się rozpoznać danych pojazdu.<br>Wklej cały tekst z aplikacji „Skaner Dowodów” – z przycisku „Kopiuj wszystko” albo „Udostępnij”.<br><br>Oczekiwany układ:<br><code>Numer rejestracyjny (A): DLW VK98<br>Marka (D.1): CITROEN<br>Model (D.3): C4 PICASSO<br>Numer VIN (E): VF7UARHJH45348611</code>');
             }
         }
         
@@ -8917,6 +9565,7 @@ P.3:P LPG`;
             
             // Seria dowodu
             if (result._seriaDowodu) vehicleData.documentSeries = result._seriaDowodu;
+            if (result._rodzajPojazdu) vehicleData.kind = result._rodzajPojazdu.toUpperCase();
             
             // === DANE WŁAŚCICIELA/KIEROWCY ===
             // Właściciel pojazdu
